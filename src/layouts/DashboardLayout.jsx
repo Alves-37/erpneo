@@ -136,7 +136,7 @@ export default function DashboardLayout() {
         <main className="flex-1 h-screen overflow-hidden">
           <div className="flex h-screen flex-col overflow-hidden">
           <header className="h-14 shrink-0 bg-slate-950 border-b border-slate-800 flex items-center px-6 gap-4">
-            <div className="text-base font-semibold text-slate-200">
+            <div className="text-lg font-semibold text-slate-200">
               {me?.name ? `${me.name} · ${me.role || 'user'}` : 'Online-first'}
             </div>
 
