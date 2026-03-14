@@ -86,7 +86,7 @@ export default function SalesPage() {
     }
   }, [])
 
-  const apiBaseUrl = useMemo(() => import.meta.env.VITE_API_URL || 'http://localhost:8000', [])
+  const apiBaseUrl = useMemo(() => import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app', [])
 
   useEffect(() => {
     if (!openDetails) return

@@ -243,7 +243,7 @@ export default function SettingsPage() {
               <div className="h-14 w-14 overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
                 {company?.logo_url ? (
                   <img
-                    src={(import.meta.env.VITE_API_URL || 'http://localhost:8000') + company.logo_url}
+                    src={(import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app') + company.logo_url}
                     alt="Logo"
                     className="h-full w-full object-contain"
                   />

@@ -41,7 +41,7 @@ function fmtStatus(st) {
 }
 
 export default function OrdersPage() {
-  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
 
   const [status, setStatus] = useState('open')
   const [loading, setLoading] = useState(true)

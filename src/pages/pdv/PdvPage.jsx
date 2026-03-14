@@ -41,7 +41,7 @@ function Modal({ open, title, children, onClose }) {
 }
 
 export default function PdvPage() {
-  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
 
   const [company, setCompany] = useState(null)
   const [branch, setBranch] = useState(null)

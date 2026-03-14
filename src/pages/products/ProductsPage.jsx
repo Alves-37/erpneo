@@ -55,7 +55,7 @@ export default function ProductsPage() {
 
   const token = useAuthStore((s) => s.token)
 
-  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
 
   const [imageByProductId, setImageByProductId] = useState({})
 
