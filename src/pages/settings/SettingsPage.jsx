@@ -1,0 +1,471 @@
+import { useEffect, useState } from 'react'
+
+import { listCompanies } from '../../api/companies.js'
+import { updateMyCompany, uploadMyCompanyLogo } from '../../api/companySettings.js'
+import { getMyBranch } from '../../api/branches.js'
+import { changePassword, updateMe } from '../../api/me.js'
+import { toast } from '../../services/toast.js'
+
+function Modal({ open, title, children, onClose }) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-40">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+            <div className="text-sm font-semibold text-white">{title}</div>
+            <button
+              onClick={onClose}
+              className="h-8 w-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-300"
+              type="button"
+              aria-label="Fechar"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                <path d="M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+          <div className="p-5">{children}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function SettingsPage() {
+  const [company, setCompany] = useState(null)
+  const [branch, setBranch] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  const [me, setMe] = useState(null)
+  const [profileName, setProfileName] = useState('')
+  const [profileEmail, setProfileEmail] = useState('')
+  const [profileUsername, setProfileUsername] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+
+  const [companyName, setCompanyName] = useState('')
+  const [companyNuit, setCompanyNuit] = useState('')
+  const [companyEmail, setCompanyEmail] = useState('')
+  const [companyPhone, setCompanyPhone] = useState('')
+  const [companyProvince, setCompanyProvince] = useState('')
+  const [companyCity, setCompanyCity] = useState('')
+  const [companyAddress, setCompanyAddress] = useState('')
+
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
+
+  const [openCompany, setOpenCompany] = useState(false)
+  const [openProfile, setOpenProfile] = useState(false)
+  const [openSecurity, setOpenSecurity] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const companies = await listCompanies()
+        const c = companies?.[0] || null
+        if (!mounted) return
+        setCompany(c)
+
+        const b = await getMyBranch()
+        setBranch(b)
+
+        setCompanyName(c?.name || '')
+        setCompanyNuit(c?.nuit || '')
+        setCompanyEmail(c?.email || '')
+        setCompanyPhone(c?.phone || '')
+        setCompanyProvince(c?.province || '')
+        setCompanyCity(c?.city || '')
+        setCompanyAddress(c?.address || '')
+
+        const meRes = await (await import('../../api/auth.js')).getMe()
+        setMe(meRes)
+        setProfileName(meRes?.name || '')
+        setProfileEmail(meRes?.email || '')
+        setProfileUsername(meRes?.username || '')
+      } catch {
+        toast.error('Não foi possível carregar configurações agora.')
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  async function onUploadLogo(file) {
+    if (!file) return
+    setUploadingLogo(true)
+    try {
+      const updated = await uploadMyCompanyLogo(file)
+      setCompany(updated)
+      toast.success('Logo atualizado.')
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Não foi possível enviar o logo agora.'
+      toast.error(msg)
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  async function onSave() {
+    setSaving(true)
+    try {
+      const updated = await updateMyCompany({
+        name: companyName,
+        nuit: companyNuit || null,
+        email: companyEmail || null,
+        phone: companyPhone || null,
+        province: companyProvince || null,
+        city: companyCity || null,
+        address: companyAddress || null,
+      })
+      setCompany(updated)
+
+      toast.success('Configurações salvas.')
+      setOpenCompany(false)
+    } catch {
+      toast.error('Não foi possível salvar agora. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function onSaveProfile() {
+    setSavingProfile(true)
+    try {
+      const updated = await updateMe({
+        name: profileName,
+        email: profileEmail,
+        username: profileUsername,
+      })
+      setMe(updated)
+      toast.success('Perfil atualizado.')
+      setOpenProfile(false)
+    } catch {
+      toast.error('Não foi possível atualizar o perfil agora.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  async function onChangePassword() {
+    if (!currentPassword || !newPassword) {
+      toast.error('Preencha a senha atual e a nova senha.')
+      return
+    }
+    setChangingPassword(true)
+    try {
+      await changePassword({ current_password: currentPassword, new_password: newPassword })
+      setCurrentPassword('')
+      setNewPassword('')
+      toast.success('Senha alterada com sucesso.')
+      setOpenSecurity(false)
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Não foi possível alterar a senha agora.'
+      toast.error(msg)
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="text-xl font-semibold">Configurações</div>
+      <div className="mt-1 text-sm text-slate-300">Empresa: {company?.name || '—'}</div>
+      <div className="mt-1 text-xs text-slate-500">Para trocar de filial (Bar/Restaurante/Retalho), use o seletor de Filial no topo.</div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="text-sm font-semibold text-white">Empresa</div>
+          <div className="mt-2 text-sm text-slate-300">
+            <div className="text-slate-100 font-medium">{company?.name || '—'}</div>
+            <div className="text-slate-400 text-xs mt-1">Filial: {branch?.name || '—'} · Tipo: {branch?.business_type || '—'}</div>
+          </div>
+          <div className="mt-4">
+            <button
+              onClick={() => setOpenCompany(true)}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white"
+              type="button"
+            >
+              Configurar empresa
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="text-sm font-semibold text-white">Meu perfil</div>
+          <div className="mt-2 text-sm text-slate-300">
+            <div className="text-slate-100 font-medium">{me?.name || '—'}</div>
+            <div className="text-slate-400 text-xs mt-1">{me?.email || ''}</div>
+          </div>
+          <div className="mt-4">
+            <button
+              onClick={() => setOpenProfile(true)}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white"
+              type="button"
+            >
+              Editar perfil
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="text-sm font-semibold text-white">Segurança</div>
+          <div className="mt-2 text-sm text-slate-300">Troque sua senha e mantenha sua conta segura.</div>
+          <div className="mt-4">
+            <button
+              onClick={() => setOpenSecurity(true)}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white"
+              type="button"
+            >
+              Trocar senha
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <Modal open={openCompany} title="Configurar empresa" onClose={() => (saving ? null : setOpenCompany(false))}>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onSave()
+          }}
+        >
+          <div className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Logo da empresa</div>
+            <div className="flex items-center gap-4">
+              <div className="h-14 w-14 overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
+                {company?.logo_url ? (
+                  <img
+                    src={(import.meta.env.VITE_API_URL || 'http://localhost:8000') + company.logo_url}
+                    alt="Logo"
+                    className="h-full w-full object-contain"
+                  />
+                ) : null}
+              </div>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  disabled={uploadingLogo}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    e.target.value = ''
+                    onUploadLogo(f)
+                  }}
+                />
+                {uploadingLogo ? 'Enviando...' : 'Carregar logo'}
+              </label>
+              <div className="text-xs text-slate-400">PNG/JPG/WEBP</div>
+            </div>
+          </div>
+
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Nome da empresa</div>
+            <input
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="text"
+            />
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="grid gap-2">
+              <div className="text-sm font-medium text-slate-200">NUIT</div>
+              <input
+                value={companyNuit}
+                onChange={(e) => setCompanyNuit(e.target.value)}
+                className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                type="text"
+              />
+            </label>
+
+            <label className="grid gap-2">
+              <div className="text-sm font-medium text-slate-200">Telefone</div>
+              <input
+                value={companyPhone}
+                onChange={(e) => setCompanyPhone(e.target.value)}
+                className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                type="text"
+              />
+            </label>
+          </div>
+
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Email</div>
+            <input
+              value={companyEmail}
+              onChange={(e) => setCompanyEmail(e.target.value)}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="email"
+            />
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="grid gap-2">
+              <div className="text-sm font-medium text-slate-200">Província</div>
+              <input
+                value={companyProvince}
+                onChange={(e) => setCompanyProvince(e.target.value)}
+                className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                type="text"
+              />
+            </label>
+
+            <label className="grid gap-2">
+              <div className="text-sm font-medium text-slate-200">Cidade</div>
+              <input
+                value={companyCity}
+                onChange={(e) => setCompanyCity(e.target.value)}
+                className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                type="text"
+              />
+            </label>
+          </div>
+
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Endereço</div>
+            <input
+              value={companyAddress}
+              onChange={(e) => setCompanyAddress(e.target.value)}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="text"
+            />
+          </label>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setOpenCompany(false)}
+              disabled={saving}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Fechar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={openProfile} title="Editar perfil" onClose={() => (savingProfile ? null : setOpenProfile(false))}>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onSaveProfile()
+          }}
+        >
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Nome</div>
+            <input
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="text"
+            />
+          </label>
+
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Username</div>
+            <input
+              value={profileUsername}
+              onChange={(e) => setProfileUsername(e.target.value)}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="text"
+            />
+          </label>
+
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Email</div>
+            <input
+              value={profileEmail}
+              onChange={(e) => setProfileEmail(e.target.value)}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="email"
+            />
+          </label>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setOpenProfile(false)}
+              disabled={savingProfile}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Fechar
+            </button>
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {savingProfile ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={openSecurity} title="Trocar senha" onClose={() => (changingPassword ? null : setOpenSecurity(false))}>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onChangePassword()
+          }}
+        >
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Senha atual</div>
+            <input
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="password"
+            />
+          </label>
+
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Nova senha</div>
+            <input
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="password"
+            />
+          </label>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setOpenSecurity(false)}
+              disabled={changingPassword}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Fechar
+            </button>
+            <button
+              type="submit"
+              disabled={changingPassword}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {changingPassword ? 'Alterando...' : 'Alterar senha'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  )
+}
