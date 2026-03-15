@@ -43,6 +43,10 @@ export default function UsersPage() {
 
   const [actionsUser, setActionsUser] = useState(null)
 
+  const [openConfirm, setOpenConfirm] = useState(false)
+  const [confirmUser, setConfirmUser] = useState(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+
   const [formData, setFormData] = useState({
     name: '',
     username: '',
@@ -136,15 +140,24 @@ export default function UsersPage() {
     }
   }
 
-  async function handleDelete(row) {
-    const ok = window.confirm(`Excluir o usuário "${row.name}"?`)
-    if (!ok) return
+  function requestDelete(row) {
+    setConfirmUser(row)
+    setOpenConfirm(true)
+  }
+
+  async function confirmDelete() {
+    if (!confirmUser?.id) return
+    setConfirmBusy(true)
     try {
-      await deleteUser(row.id)
+      await deleteUser(confirmUser.id)
       toast.success('Usuário excluído.')
+      setOpenConfirm(false)
+      setConfirmUser(null)
       await load()
     } catch {
       toast.error('Não foi possível excluir agora.')
+    } finally {
+      setConfirmBusy(false)
     }
   }
 
@@ -257,7 +270,7 @@ export default function UsersPage() {
               const u = actionsUser
               setActionsUser(null)
               if (!u) return
-              handleDelete(u)
+              requestDelete(u)
             }}
           >
             Excluir
@@ -269,6 +282,43 @@ export default function UsersPage() {
           >
             Cancelar
           </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openConfirm}
+        title="Excluir usuário"
+        onClose={() => {
+          if (confirmBusy) return
+          setOpenConfirm(false)
+          setConfirmUser(null)
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-200">
+            Tem certeza que deseja excluir o usuário <span className="font-semibold text-white">{confirmUser?.name}</span>?
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={() => {
+                setOpenConfirm(false)
+                setConfirmUser(null)
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 disabled:opacity-60"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={confirmDelete}
+              className="rounded-xl border border-rose-900/60 bg-rose-950/50 hover:bg-rose-950 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+            >
+              {confirmBusy ? 'Excluindo...' : 'Excluir'}
+            </button>
+          </div>
         </div>
       </Modal>
 

@@ -36,6 +36,10 @@ export default function WarehousePage() {
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState([])
 
+  const [openConfirm, setOpenConfirm] = useState(false)
+  const [confirmRow, setConfirmRow] = useState(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+
   const [onlyLowStock, setOnlyLowStock] = useState(false)
   const [loadingLow, setLoadingLow] = useState(false)
   const [lowRows, setLowRows] = useState([])
@@ -140,17 +144,25 @@ export default function WarehousePage() {
     }
   }
 
-  async function onDelete(row) {
-    const ok = window.confirm(`Excluir o local "${row.name}"?`)
-    if (!ok) return
+  function requestDelete(row) {
+    setConfirmRow(row)
+    setOpenConfirm(true)
+  }
 
+  async function confirmDelete() {
+    if (!confirmRow?.id) return
+    setConfirmBusy(true)
     try {
-      await deleteStockLocation(row.id)
+      await deleteStockLocation(confirmRow.id)
       toast.success('Local excluído.')
+      setOpenConfirm(false)
+      setConfirmRow(null)
       await load()
     } catch (e) {
       const msg = e?.response?.data?.detail
       toast.error(msg || 'Não foi possível excluir local agora.')
+    } finally {
+      setConfirmBusy(false)
     }
   }
 
@@ -198,7 +210,7 @@ export default function WarehousePage() {
                   <button
                     type="button"
                     className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200"
-                    onClick={() => onDelete(r)}
+                    onClick={() => requestDelete(r)}
                     disabled={r.is_default}
                   >
                     Excluir
@@ -309,6 +321,43 @@ export default function WarehousePage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={openConfirm}
+        title="Excluir local"
+        onClose={() => {
+          if (confirmBusy) return
+          setOpenConfirm(false)
+          setConfirmRow(null)
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-200">
+            Tem certeza que deseja excluir o local <span className="font-semibold text-white">{confirmRow?.name}</span>?
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={() => {
+                setOpenConfirm(false)
+                setConfirmRow(null)
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 disabled:opacity-60"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={confirmDelete}
+              className="rounded-xl border border-rose-900/60 bg-rose-950/50 hover:bg-rose-950 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+            >
+              {confirmBusy ? 'Excluindo...' : 'Excluir'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

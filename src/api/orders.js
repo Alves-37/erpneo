@@ -19,3 +19,8 @@ export async function closeOrder(orderId, payload) {
   const res = await apiClient.post(`/orders/${orderId}/close`, payload)
   return res.data
 }
+
+export async function deleteOrder(orderId) {
+  const res = await apiClient.delete(`/orders/${orderId}`)
+  return res.data
+}

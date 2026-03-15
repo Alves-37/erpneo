@@ -77,6 +77,11 @@ export default function SuppliersPage() {
 
   const [actionsSupplier, setActionsSupplier] = useState(null)
 
+  const [openConfirm, setOpenConfirm] = useState(false)
+  const [confirmKind, setConfirmKind] = useState(null)
+  const [confirmRow, setConfirmRow] = useState(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+
   const [openSupplierForm, setOpenSupplierForm] = useState(false)
   const [savingSupplier, setSavingSupplier] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState(null)
@@ -234,15 +239,61 @@ export default function SuppliersPage() {
     }
   }
 
-  async function onDeleteSupplier(row) {
-    const ok = window.confirm(`Excluir o fornecedor "${row.name}"?`)
-    if (!ok) return
+  function requestDeleteSupplier(row) {
+    setConfirmKind('supplier')
+    setConfirmRow(row)
+    setOpenConfirm(true)
+  }
+
+  function requestDeletePurchase(row) {
+    setConfirmKind('purchase')
+    setConfirmRow(row)
+    setOpenConfirm(true)
+  }
+
+  function requestDeletePayment(row) {
+    setConfirmKind('payment')
+    setConfirmRow(row)
+    setOpenConfirm(true)
+  }
+
+  async function confirmAction() {
+    if (!confirmKind || !confirmRow) return
+    setConfirmBusy(true)
     try {
-      await deleteSupplier(row.id)
-      toast.success('Fornecedor excluído.')
-      await load()
+      if (confirmKind === 'supplier') {
+        await deleteSupplier(confirmRow.id)
+        toast.success('Fornecedor excluído.')
+        await load()
+      }
+
+      if (confirmKind === 'purchase') {
+        if (!activeSupplier?.id) return
+        await deleteSupplierPurchase(confirmRow.id)
+        toast.success('Compra excluída.')
+        await loadPurchases(activeSupplier.id)
+      }
+
+      if (confirmKind === 'payment') {
+        if (!activeSupplier?.id) return
+        await deleteSupplierPayment(confirmRow.id)
+        toast.success('Pagamento excluído.')
+        await loadPayments(activeSupplier.id)
+      }
+
+      setOpenConfirm(false)
+      setConfirmKind(null)
+      setConfirmRow(null)
     } catch {
-      toast.error('Não foi possível excluir fornecedor agora.')
+      toast.error(
+        confirmKind === 'supplier'
+          ? 'Não foi possível excluir fornecedor agora.'
+          : confirmKind === 'purchase'
+            ? 'Não foi possível excluir compra agora.'
+            : 'Não foi possível excluir pagamento agora.'
+      )
+    } finally {
+      setConfirmBusy(false)
     }
   }
 
@@ -313,16 +364,7 @@ export default function SuppliersPage() {
   }
 
   async function onDeletePurchase(row) {
-    if (!activeSupplier?.id) return
-    const ok = window.confirm('Excluir esta compra?')
-    if (!ok) return
-    try {
-      await deleteSupplierPurchase(row.id)
-      toast.success('Compra excluída.')
-      await loadPurchases(activeSupplier.id)
-    } catch {
-      toast.error('Não foi possível excluir compra agora.')
-    }
+    requestDeletePurchase(row)
   }
 
   function openCreatePayment() {
@@ -386,16 +428,7 @@ export default function SuppliersPage() {
   }
 
   async function onDeletePayment(row) {
-    if (!activeSupplier?.id) return
-    const ok = window.confirm('Excluir este pagamento?')
-    if (!ok) return
-    try {
-      await deleteSupplierPayment(row.id)
-      toast.success('Pagamento excluído.')
-      await loadPayments(activeSupplier.id)
-    } catch {
-      toast.error('Não foi possível excluir pagamento agora.')
-    }
+    requestDeletePayment(row)
   }
 
   return (
@@ -496,7 +529,7 @@ export default function SuppliersPage() {
               const s = actionsSupplier
               setActionsSupplier(null)
               if (!s) return
-              onDeleteSupplier(s)
+              requestDeleteSupplier(s)
             }}
           >
             Excluir
@@ -508,6 +541,61 @@ export default function SuppliersPage() {
           >
             Cancelar
           </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openConfirm}
+        title={
+          confirmKind === 'supplier'
+            ? 'Excluir fornecedor'
+            : confirmKind === 'purchase'
+              ? 'Excluir compra'
+              : confirmKind === 'payment'
+                ? 'Excluir pagamento'
+                : 'Confirmar'
+        }
+        onClose={() => {
+          if (confirmBusy) return
+          setOpenConfirm(false)
+          setConfirmKind(null)
+          setConfirmRow(null)
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-200">
+            {confirmKind === 'supplier' ? (
+              <>
+                Tem certeza que deseja excluir o fornecedor <span className="font-semibold text-white">{confirmRow?.name}</span>?
+              </>
+            ) : confirmKind === 'purchase' ? (
+              <>Tem certeza que deseja excluir esta compra?</>
+            ) : (
+              <>Tem certeza que deseja excluir este pagamento?</>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={() => {
+                setOpenConfirm(false)
+                setConfirmKind(null)
+                setConfirmRow(null)
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 disabled:opacity-60"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={confirmAction}
+              className="rounded-xl border border-rose-900/60 bg-rose-950/50 hover:bg-rose-950 px-4 py-2 text-sm font-semibold text-rose-100 disabled:opacity-60"
+            >
+              {confirmBusy ? 'Excluindo...' : 'Excluir'}
+            </button>
+          </div>
         </div>
       </Modal>
 

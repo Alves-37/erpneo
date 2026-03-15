@@ -35,6 +35,10 @@ export default function TablesPage() {
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState([])
 
+  const [openConfirm, setOpenConfirm] = useState(false)
+  const [confirmRow, setConfirmRow] = useState(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+
   const [openForm, setOpenForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [number, setNumber] = useState('')
@@ -99,15 +103,24 @@ export default function TablesPage() {
     }
   }
 
-  async function onDelete(row) {
-    const ok = window.confirm(`Apagar a mesa ${row.number}?`)
-    if (!ok) return
+  function requestDelete(row) {
+    setConfirmRow(row)
+    setOpenConfirm(true)
+  }
+
+  async function confirmDelete() {
+    if (!confirmRow?.id) return
+    setConfirmBusy(true)
     try {
-      await deleteRestaurantTable(row.id)
+      await deleteRestaurantTable(confirmRow.id)
       toast.success('Mesa apagada.')
+      setOpenConfirm(false)
+      setConfirmRow(null)
       await load()
     } catch {
       toast.error('Não foi possível apagar a mesa agora.')
+    } finally {
+      setConfirmBusy(false)
     }
   }
 
@@ -164,7 +177,7 @@ export default function TablesPage() {
                   <button
                     type="button"
                     className="rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-1 text-xs text-rose-200"
-                    onClick={() => onDelete(row)}
+                    onClick={() => requestDelete(row)}
                   >
                     Apagar
                   </button>
@@ -235,6 +248,43 @@ export default function TablesPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={openConfirm}
+        title="Apagar mesa"
+        onClose={() => {
+          if (confirmBusy) return
+          setOpenConfirm(false)
+          setConfirmRow(null)
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-200">
+            Tem certeza que deseja apagar a mesa <span className="font-semibold text-white">{confirmRow?.number}</span>?
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={() => {
+                setOpenConfirm(false)
+                setConfirmRow(null)
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={confirmDelete}
+              className="rounded-xl border border-rose-900/60 bg-rose-950/50 hover:bg-rose-950 px-4 py-2.5 text-sm font-semibold text-rose-100 disabled:opacity-60"
+            >
+              {confirmBusy ? 'Apagando...' : 'Apagar'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

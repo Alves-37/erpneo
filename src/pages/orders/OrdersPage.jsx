@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { closeOrder, listOrders, updateOrder } from '../../api/orders.js'
+import { closeOrder, deleteOrder, listOrders, updateOrder } from '../../api/orders.js'
 import { listProductImages, listProducts } from '../../api/products.js'
 import { toast } from '../../services/toast.js'
 
@@ -58,6 +58,11 @@ export default function OrdersPage() {
 
   const [openDetails, setOpenDetails] = useState(false)
   const [detailsOrder, setDetailsOrder] = useState(null)
+
+  const [openConfirm, setOpenConfirm] = useState(false)
+  const [confirmKind, setConfirmKind] = useState(null)
+  const [confirmOrder, setConfirmOrder] = useState(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
 
   const paidNum = useMemo(() => {
     const n = Number(String(paid || '').replace(',', '.'))
@@ -173,15 +178,43 @@ export default function OrdersPage() {
     }
   }
 
-  async function cancelOrder(o) {
-    const ok = window.confirm(`Cancelar o pedido Mesa ${o.table_number} / Cliente ${o.seat_number}?`)
-    if (!ok) return
+  function requestCancelOrder(o) {
+    setConfirmKind('cancel')
+    setConfirmOrder(o)
+    setOpenConfirm(true)
+  }
+
+  function requestDeleteOrder(o) {
+    if (!o) return
+    if (o.status !== 'closed' && o.status !== 'cancelled') {
+      toast.error('Só é possível excluir pedidos fechados ou cancelados.')
+      return
+    }
+    setConfirmKind('delete')
+    setConfirmOrder(o)
+    setOpenConfirm(true)
+  }
+
+  async function confirmAction() {
+    if (!confirmOrder || !confirmKind) return
+    setConfirmBusy(true)
     try {
-      await updateOrder(o.id, { status: 'cancelled' })
-      toast.success('Pedido cancelado.')
+      if (confirmKind === 'cancel') {
+        await updateOrder(confirmOrder.id, { status: 'cancelled' })
+        toast.success('Pedido cancelado.')
+      } else if (confirmKind === 'delete') {
+        await deleteOrder(confirmOrder.id)
+        toast.success('Pedido excluído.')
+      }
+      setOpenConfirm(false)
+      setConfirmKind(null)
+      setConfirmOrder(null)
       await load()
+      setOpenDetails(false)
     } catch {
-      toast.error('Não foi possível cancelar o pedido agora.')
+      toast.error(confirmKind === 'delete' ? 'Não foi possível excluir o pedido agora.' : 'Não foi possível cancelar o pedido agora.')
+    } finally {
+      setConfirmBusy(false)
     }
   }
 
@@ -289,6 +322,26 @@ export default function OrdersPage() {
                       {o.status === 'open' || o.status === 'in_progress' ? (
                         <button
                           type="button"
+                          className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200"
+                          onClick={() => requestCancelOrder(o)}
+                        >
+                          Cancelar
+                        </button>
+                      ) : null}
+
+                      {o.status === 'closed' || o.status === 'cancelled' ? (
+                        <button
+                          type="button"
+                          className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200"
+                          onClick={() => requestDeleteOrder(o)}
+                        >
+                          Excluir
+                        </button>
+                      ) : null}
+
+                      {o.status === 'open' || o.status === 'in_progress' ? (
+                        <button
+                          type="button"
                           className="rounded-xl bg-brand-600 hover:bg-brand-700 px-3 py-2 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-brand-600"
                           onClick={() => openCloseModal(o)}
                         >
@@ -384,12 +437,19 @@ export default function OrdersPage() {
                 <button
                   type="button"
                   className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200"
-                  onClick={async () => {
-                    await cancelOrder(detailsOrder)
-                    setOpenDetails(false)
-                  }}
+                  onClick={() => requestCancelOrder(detailsOrder)}
                 >
                   Cancelar
+                </button>
+              ) : null}
+
+              {detailsOrder.status === 'closed' || detailsOrder.status === 'cancelled' ? (
+                <button
+                  type="button"
+                  className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200"
+                  onClick={() => requestDeleteOrder(detailsOrder)}
+                >
+                  Excluir
                 </button>
               ) : null}
 
@@ -403,6 +463,65 @@ export default function OrdersPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={openConfirm}
+        title={
+          confirmKind === 'delete'
+            ? 'Excluir pedido'
+            : confirmKind === 'cancel'
+              ? 'Cancelar pedido'
+              : 'Confirmar'
+        }
+        onClose={() => {
+          if (confirmBusy) return
+          setOpenConfirm(false)
+          setConfirmKind(null)
+          setConfirmOrder(null)
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-200">
+            {confirmKind === 'delete' ? (
+              <>
+                Tem certeza que deseja excluir o pedido <span className="font-semibold text-white">Mesa {confirmOrder?.table_number}</span> ·{' '}
+                <span className="font-semibold text-white">Cliente {confirmOrder?.seat_number}</span>?
+              </>
+            ) : (
+              <>
+                Tem certeza que deseja cancelar o pedido <span className="font-semibold text-white">Mesa {confirmOrder?.table_number}</span> ·{' '}
+                <span className="font-semibold text-white">Cliente {confirmOrder?.seat_number}</span>?
+              </>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={() => {
+                setOpenConfirm(false)
+                setConfirmKind(null)
+                setConfirmOrder(null)
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 disabled:opacity-60"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              disabled={confirmBusy}
+              onClick={confirmAction}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60 ${
+                confirmKind === 'delete'
+                  ? 'border border-rose-900/60 bg-rose-950/50 hover:bg-rose-950 text-rose-100'
+                  : 'border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 text-rose-200'
+              }`}
+            >
+              {confirmBusy ? 'Processando...' : confirmKind === 'delete' ? 'Excluir' : 'Cancelar'}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       <Modal
