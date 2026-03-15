@@ -13,6 +13,7 @@ const nav = [
   { to: '/stock/adjust', label: 'Ajuste de Stock' },
   { to: '/stock/history', label: 'Histórico de Stock' },
   { to: '/sales', label: 'Vendas' },
+  { to: '/debts', label: 'Dívidas', hideForRestaurant: true },
   { to: '/pdv', label: 'PDV' },
   { to: '/orders', label: 'Pedidos', restaurantOnly: true },
   { to: '/tables', label: 'Mesas', restaurantOnly: true },
@@ -119,12 +120,14 @@ export default function DashboardLayout() {
           <nav className="mt-5 flex flex-col gap-2">
             {nav
               .filter((item) => !item.restaurantOnly || isRestaurant)
+              .filter((item) => !(isRestaurant && item.hideForRestaurant))
               .filter((item) => !(isBar && item.to.startsWith('/stock')))
               .filter((item) => {
                 if (!isCashier) return true
                 return (
                   item.to === '/dashboard' ||
                   item.to === '/sales' ||
+                  item.to === '/debts' ||
                   item.to === '/pdv' ||
                   item.to === '/orders' ||
                   item.to === '/tables' ||
@@ -178,26 +181,61 @@ export default function DashboardLayout() {
 
         <main className="flex-1 h-screen overflow-hidden">
           <div className="flex h-screen flex-col overflow-hidden">
-          <header className="h-14 shrink-0 flex items-center justify-between px-4 lg:px-6 mx-3 mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg backdrop-blur lg:mx-0 lg:mt-0 lg:rounded-none lg:border-x-0 lg:border-t-0 lg:bg-slate-950 lg:shadow-none">
-            {/* Mobile menu button */}
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            
-            <div className="ml-2 lg:ml-0">
-              <div className="text-sm lg:text-lg font-semibold text-slate-200 truncate">
-                {me?.name ? `${me.name} · ${me.role || 'user'}` : 'Online-first'}
+          <header className="shrink-0 px-4 lg:px-6 mx-3 mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg backdrop-blur lg:mx-0 lg:mt-0 lg:rounded-none lg:border-x-0 lg:border-t-0 lg:bg-slate-950 lg:shadow-none">
+            <div className="h-14 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+
+              <div className="min-w-0 flex-1 lg:flex-none lg:ml-0">
+                <div className="text-sm lg:text-lg font-semibold text-slate-200 truncate">
+                  {me?.name ? `${me.name} · ${me.role || 'user'}` : 'Online-first'}
+                </div>
+              </div>
+
+              <div className="hidden lg:flex items-center gap-3">
+                <div className="text-xs font-semibold text-slate-400">Filial</div>
+                <select
+                  value={branch?.id ? String(branch.id) : ''}
+                  disabled={switchingBranch || !branches?.length}
+                  onChange={async (e) => {
+                    const nextId = e.target.value
+                    if (!nextId) return
+                    setSwitchingBranch(true)
+                    try {
+                      const b = await switchMyBranch(nextId)
+                      setBranch(b, { persist: true })
+                      try {
+                        const data = await getMe()
+                        setMe(data, { persist: true })
+                      } catch {
+                        // ignore
+                      }
+                      bumpContext()
+                      navigate('/dashboard')
+                    } finally {
+                      setSwitchingBranch(false)
+                    }
+                  }}
+                  className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
+                >
+                  {!branches?.length ? <option value="">Sem filiais</option> : null}
+                  {(branches || []).map((b) => (
+                    <option key={b.id} value={String(b.id)}>
+                      {b.name} · {businessTypeLabel[b.business_type] || b.business_type}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <div className="ml-auto mr-2 lg:mr-0 flex items-center gap-3">
-              <div className="hidden lg:block text-xs font-semibold text-slate-400">Filial</div>
+            <div className="pb-3 lg:hidden">
               <select
                 value={branch?.id ? String(branch.id) : ''}
                 disabled={switchingBranch || !branches?.length}
@@ -220,7 +258,7 @@ export default function DashboardLayout() {
                     setSwitchingBranch(false)
                   }
                 }}
-                className="rounded-xl border border-slate-800 bg-slate-950 px-2 lg:px-3 py-2 text-xs lg:text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60 min-w-0 max-w-[80px] lg:max-w-none"
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
               >
                 {!branches?.length ? <option value="">Sem filiais</option> : null}
                 {(branches || []).map((b) => (

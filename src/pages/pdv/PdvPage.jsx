@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { listCompanies } from '../../api/companies.js'
-import { getMyBranch } from '../../api/branches.js'
+import { getMyBranch, listBranches, switchMyBranch } from '../../api/branches.js'
 import { issueFiscalDocumentFromSale } from '../../api/fiscalDocuments.js'
 import { listOrders } from '../../api/orders.js'
 import { listProductCategories } from '../../api/productCategories.js'
@@ -9,8 +9,10 @@ import { listProductImages, listProducts } from '../../api/products.js'
 import { createOrder } from '../../api/orders.js'
 import { listRestaurantTables } from '../../api/restaurantTables.js'
 import { createSale } from '../../api/sales.js'
+import { createDebt } from '../../api/debts.js'
 import { convertQuoteToSale, createQuote, deleteQuote, listQuotes, updateQuote } from '../../api/quotes.js'
 import { toast } from '../../services/toast.js'
+import { useAuthStore } from '../../store/authStore.js'
 
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
@@ -43,8 +45,14 @@ function Modal({ open, title, children, onClose }) {
 export default function PdvPage() {
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
 
+  const me = useAuthStore((s) => s.me)
+  const setBranchGlobal = useAuthStore((s) => s.setBranch)
+  const bumpContext = useAuthStore((s) => s.bumpContext)
+
   const [company, setCompany] = useState(null)
   const [branch, setBranch] = useState(null)
+  const [branches, setBranches] = useState([])
+  const [switchingBranch, setSwitchingBranch] = useState(false)
   const businessType = branch?.business_type || 'retail'
   const isRestaurant = businessType === 'restaurant'
 
@@ -94,6 +102,14 @@ export default function PdvPage() {
   const [quoteSeries, setQuoteSeries] = useState('A')
   const [quoteCustomerName, setQuoteCustomerName] = useState('')
   const [quoteCustomerNuit, setQuoteCustomerNuit] = useState('')
+
+  const userLabel = useMemo(() => {
+    const username = String(me?.username || '').trim()
+    if (username) return username
+    const nm = String(me?.name || '').trim()
+    if (!nm) return 'Usuário'
+    return nm.split(' ')[0]
+  }, [me])
 
   async function confirmDeleteQuote() {
     if (!quoteToDelete?.id) return
@@ -240,6 +256,7 @@ export default function PdvPage() {
 
   const effectivePaidNum = useMemo(() => {
     if (paymentMethod === 'cash') return paidNum
+    if (paymentMethod === 'debt') return 0
     return grossTotal
   }, [paymentMethod, paidNum, grossTotal])
 
@@ -273,6 +290,7 @@ export default function PdvPage() {
       const c = companies?.[0] || null
       setCompany(c)
       setBranch(b)
+      setBranchGlobal(b, { persist: true })
       await loadCategories(b?.business_type || 'retail')
       await loadProducts('')
     } catch {
@@ -281,6 +299,21 @@ export default function PdvPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const list = await listBranches()
+        if (mounted) setBranches(Array.isArray(list) ? list : [])
+      } catch {
+        if (mounted) setBranches([])
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   useEffect(() => {
     loadInitial()
@@ -416,6 +449,10 @@ export default function PdvPage() {
   }, [cartKey])
 
   useEffect(() => {
+    if (paymentMethod === 'debt') {
+      setPaid('')
+      return
+    }
     if (paymentMethod !== 'cash') {
       setPaid(grossTotal ? Number(grossTotal).toFixed(2) : '')
     }
@@ -573,21 +610,37 @@ export default function PdvPage() {
         setTableNumber('')
         setSeatNumber('1')
       } else {
-        await createSale({
-          sale_channel: normalizedChannel,
-          table_number: normalizedChannel === 'table' ? tableNum : null,
-          seat_number: normalizedChannel === 'table' ? seatNum : null,
-          payment_method: paymentMethod,
-          include_tax: includeTax,
-          paid: effectivePaidNum,
-          items: cartLines.map((l) => ({
-            product_id: l.product.id,
-            qty: l.qty,
-            price_at_sale: Number(l.product.price || 0),
-            cost_at_sale: Number(l.product.cost || 0),
-          })),
-        })
-        toast.success('Venda registrada com sucesso.')
+        if (paymentMethod === 'debt') {
+          await createDebt({
+            customer_id: null,
+            customer_name: null,
+            customer_nuit: null,
+            include_tax: includeTax,
+            items: cartLines.map((l) => ({
+              product_id: l.product.id,
+              qty: l.qty,
+              price_at_debt: Number(l.product.price || 0),
+              cost_at_debt: Number(l.product.cost || 0),
+            })),
+          })
+          toast.success('Dívida registrada com sucesso.')
+        } else {
+          await createSale({
+            sale_channel: normalizedChannel,
+            table_number: normalizedChannel === 'table' ? tableNum : null,
+            seat_number: normalizedChannel === 'table' ? seatNum : null,
+            payment_method: paymentMethod,
+            include_tax: includeTax,
+            paid: effectivePaidNum,
+            items: cartLines.map((l) => ({
+              product_id: l.product.id,
+              qty: l.qty,
+              price_at_sale: Number(l.product.price || 0),
+              cost_at_sale: Number(l.product.cost || 0),
+            })),
+          })
+          toast.success('Venda registrada com sucesso.')
+        }
       }
       setOpenConfirm(false)
       clearCart()
@@ -606,7 +659,7 @@ export default function PdvPage() {
           <div className="border-b border-slate-800 bg-slate-900 px-4 pt-5 pb-3 shrink-0">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-base font-semibold text-white truncate">{company?.name || 'Nome Empresa'}</div>
+                <div className="text-base font-semibold text-white truncate">{userLabel}</div>
                 <div className="mt-0.5 text-sm font-semibold text-slate-300">PDV</div>
               </div>
 
@@ -698,6 +751,39 @@ export default function PdvPage() {
                   type="text"
                 />
               </div>
+            </div>
+
+            <div className="mt-3 w-full">
+              <select
+                value={branch?.id ? String(branch.id) : ''}
+                disabled={switchingBranch}
+                onChange={async (e) => {
+                  const nextId = e.target.value
+                  if (!nextId) return
+                  setSwitchingBranch(true)
+                  try {
+                    const b = await switchMyBranch(nextId)
+                    setBranch(b)
+                    setBranchGlobal(b, { persist: true })
+                    bumpContext()
+                    setActiveCategoryId('')
+                    await loadCategories(b?.business_type || 'retail')
+                    await loadProducts('')
+                  } catch {
+                    toast.error('Não foi possível trocar a filial agora.')
+                  } finally {
+                    setSwitchingBranch(false)
+                  }
+                }}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
+              >
+                {!branches?.length ? <option value="">Sem filiais</option> : null}
+                {(branches || []).map((b) => (
+                  <option key={b.id} value={String(b.id)}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {isRestaurant ? (
@@ -1094,6 +1180,7 @@ export default function PdvPage() {
                             <option value="transfer">Transferência</option>
                             <option value="cheque">Cheque</option>
                             <option value="other">Outro</option>
+                            {!isRestaurant ? <option value="debt">Dívida (Fiado)</option> : null}
                           </select>
                         </label>
                         <label className="grid gap-2">
@@ -1138,7 +1225,15 @@ export default function PdvPage() {
                     onClick={() => setOpenConfirm(true)}
                     className="w-full rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    {saving ? 'Processando...' : isTableOrder ? 'Processar pedido' : activeQuote?.id ? 'Converter cotação' : 'Finalizar venda'}
+                    {saving
+                      ? 'Processando...'
+                      : isTableOrder
+                        ? 'Processar pedido'
+                        : activeQuote?.id
+                          ? 'Converter cotação'
+                          : paymentMethod === 'debt'
+                            ? 'Processar dívida'
+                            : 'Finalizar venda'}
                   </button>
                 </div>
 
