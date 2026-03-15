@@ -39,6 +39,8 @@ export default function CustomersPage() {
   const [q, setQ] = useState('')
   const [rows, setRows] = useState([])
 
+  const [actionsCustomer, setActionsCustomer] = useState(null)
+
   const [openForm, setOpenForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -75,8 +77,8 @@ export default function CustomersPage() {
     return cb !== rb
   }
 
-  async function load() {
-    setLoading(true)
+  async function load({ silent = false } = {}) {
+    if (!silent) setLoading(true)
     try {
       const data = await listCustomers({ q })
       setRows(data || [])
@@ -84,7 +86,7 @@ export default function CustomersPage() {
       toast.error('Não foi possível carregar clientes agora.')
       setRows([])
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -92,6 +94,14 @@ export default function CustomersPage() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      load({ silent: true })
+    }, 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q])
 
   function openCreate() {
     setEditing(null)
@@ -177,82 +187,120 @@ export default function CustomersPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <div className="text-xl font-semibold">Finanças · Clientes</div>
+          <div className="text-lg sm:text-xl font-semibold">Finanças · Clientes</div>
           <div className="mt-1 text-sm text-slate-300">Cadastre clientes e organize a carteira</div>
         </div>
         <button
           type="button"
           onClick={openCreate}
-          className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2 text-sm font-semibold text-white"
+          className="w-full sm:w-auto rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2 text-sm font-semibold text-white"
         >
           Novo cliente
         </button>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-3">
+      <div className="mt-5 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="w-72 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+          className="w-full sm:w-72 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
           placeholder="Pesquisar cliente..."
         />
-        <button
-          type="button"
-          onClick={load}
-          className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white"
-        >
-          Buscar
-        </button>
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-        <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
-          <div className="col-span-4">Cliente</div>
-          <div className="col-span-3">NUIT</div>
-          <div className="col-span-3">Contacto</div>
-          <div className="col-span-2 text-right">Ações</div>
-        </div>
-
-        {loading ? (
-          <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
-        ) : rows.length ? (
-          <div className="divide-y divide-slate-800">
-            {rows.map((r) => (
-              <div
-                key={r.id}
-                className="grid grid-cols-12 gap-3 px-4 py-3 text-sm"
-                onClick={() => {
-                  if (isCrossBranch(r)) openScopeModal(r)
-                }}
-              >
-                <div className="col-span-4 font-semibold text-slate-100">{r.name}</div>
-                <div className="col-span-3 text-slate-300">{r.nuit || '-'}</div>
-                <div className="col-span-3 text-slate-300">{r.phone || r.email || '-'}</div>
-                <div className="col-span-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100"
-                    onClick={() => openEdit(r)}
-                  >
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200"
-                    onClick={() => openDeleteModal(r)}
-                  >
-                    Excluir
-                  </button>
+      {loading ? (
+        <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-6 text-sm text-slate-300">Carregando...</div>
+      ) : rows.length ? (
+        <div className="mt-5 grid grid-cols-1 gap-2 sm:gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {rows.map((r) => (
+            <div
+              key={r.id}
+              className="rounded-2xl border border-slate-800 bg-slate-900 p-3"
+              onClick={() => {
+                if (isCrossBranch(r)) openScopeModal(r)
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-semibold text-white truncate" title={r.name || ''}>
+                      {r.name}
+                    </div>
+                    {isCrossBranch(r) ? (
+                      <span className="inline-flex rounded-full border border-amber-900/60 bg-amber-950/30 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
+                        Outra filial
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
+                    <div className="truncate" title={r.nuit || ''}>
+                      <span className="text-slate-500">NUIT:</span> {r.nuit || '-'}
+                    </div>
+                    <div className="truncate" title={r.phone || r.email || ''}>
+                      <span className="text-slate-500">Contacto:</span> {r.phone || r.email || '-'}
+                    </div>
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  className="shrink-0 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setActionsCustomer(r)
+                  }}
+                >
+                  Ações
+                </button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="px-4 py-6 text-sm text-slate-300">Nenhum cliente encontrado.</div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-6 text-sm text-slate-300">Nenhum cliente encontrado.</div>
+      )}
+
+      <Modal
+        open={Boolean(actionsCustomer)}
+        title={actionsCustomer?.name ? `Ações · ${actionsCustomer.name}` : 'Ações'}
+        onClose={() => setActionsCustomer(null)}
+      >
+        <div className="grid gap-2">
+          <button
+            type="button"
+            className="w-full rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100"
+            onClick={() => {
+              const c = actionsCustomer
+              setActionsCustomer(null)
+              if (!c) return
+              openEdit(c)
+            }}
+          >
+            Editar
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-4 py-3 text-sm font-semibold text-rose-200"
+            onClick={() => {
+              const c = actionsCustomer
+              setActionsCustomer(null)
+              if (!c) return
+              openDeleteModal(c)
+            }}
+          >
+            Excluir
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100"
+            onClick={() => setActionsCustomer(null)}
+          >
+            Cancelar
+          </button>
+        </div>
+      </Modal>
 
       <Modal
         open={openForm}

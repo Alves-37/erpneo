@@ -42,8 +42,8 @@ export default function DashboardPage() {
   const points = useMemo(() => {
     const vals = (series || []).map((p) => Number(p?.total || 0))
     const max = Math.max(1, ...vals)
-    const w = 600
-    const h = 160
+    const w = typeof window !== 'undefined' && window.innerWidth < 640 ? 350 : 600
+    const h = typeof window !== 'undefined' && window.innerWidth < 640 ? 120 : 160
     const pad = 12
     if (!vals.length) return { d: '', w, h, max }
 
@@ -62,83 +62,83 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <div className="text-xl font-semibold">Dashboard</div>
+          <div className="text-lg sm:text-xl font-semibold">Dashboard</div>
           <div className="mt-1 text-sm text-slate-300">{isCashier ? 'Resumo do seu turno' : 'Resumo do seu negócio'}</div>
         </div>
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
+          className="hidden sm:inline-flex rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-3 sm:px-4 py-2.5 text-sm text-slate-100 whitespace-nowrap"
         >
           Atualizar
         </button>
       </div>
 
-      <div className={`mt-6 grid grid-cols-1 gap-4 ${isCashier ? 'md:grid-cols-1 xl:grid-cols-2' : 'md:grid-cols-2 xl:grid-cols-4'}`}>
+      <div className={`mt-6 grid grid-cols-2 gap-3 sm:gap-4 ${isCashier ? 'lg:grid-cols-2' : 'lg:grid-cols-3 xl:grid-cols-4'}`}>
         {!isCashier && (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
             <div className="text-xs font-semibold text-slate-400">Produtos</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : summary?.products_total ?? 0}</div>
+            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : summary?.products_total ?? 0}</div>
             <div className="mt-2 text-xs text-slate-400">Total cadastrado</div>
           </div>
         )}
 
         {!isCashier && (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
             <div className="text-xs font-semibold text-slate-400">Baixo estoque (padrão)</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : summary?.low_stock_default_count ?? 0}</div>
+            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : summary?.low_stock_default_count ?? 0}</div>
             <div className="mt-2 text-xs text-slate-400">Local padrão</div>
           </div>
         )}
 
         {!isCashier && (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
             <div className="text-xs font-semibold text-slate-400">Baixo estoque (armazém)</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : summary?.low_stock_warehouse_count ?? 0}</div>
+            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : summary?.low_stock_warehouse_count ?? 0}</div>
             <div className="mt-2 text-xs text-slate-400">Somente armazém</div>
           </div>
         )}
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
           <div className="text-xs font-semibold text-slate-400">Vendas de hoje</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.sales_today || 0))}</div>
+          <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.sales_today || 0))}</div>
           <div className="mt-2 text-xs text-slate-400">MZN</div>
         </div>
 
         {!isCashier && (
           <>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Valor em estoque</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.stock_value_cost || 0))}</div>
+              <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.stock_value_cost || 0))}</div>
               <div className="mt-2 text-xs text-slate-400">MZN (custo · local padrão)</div>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Valor potencial de vendas</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.stock_value_potential || 0))}</div>
+              <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.stock_value_potential || 0))}</div>
               <div className="mt-2 text-xs text-slate-400">MZN (preço · local padrão)</div>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Vendas do mês</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.sales_month || 0))}</div>
+              <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.sales_month || 0))}</div>
               <div className="mt-2 text-xs text-slate-400">MZN</div>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Lucro (mês)</div>
-              <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.profit_month || 0))}</div>
+              <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.profit_month || 0))}</div>
               <div className="mt-2 text-xs text-slate-400">MZN</div>
             </div>
           </>
         )}
 
         {isCashier && (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
             <div className="text-xs font-semibold text-slate-400">Lucro de hoje</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.profit_today || 0))}</div>
+            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.profit_today || 0))}</div>
             <div className="mt-2 text-xs text-slate-400">MZN</div>
           </div>
         )}
@@ -146,7 +146,7 @@ export default function DashboardPage() {
 
       {!isCashier && (
         <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
           <div>
             <div className="text-sm font-semibold text-white">Vendas (últimos 30 dias)</div>
             <div className="mt-1 text-xs text-slate-400">Total diário</div>
@@ -155,7 +155,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
-          <svg viewBox={`0 0 ${points.w} ${points.h}`} className="h-44 w-full" role="img" aria-label="Gráfico de vendas">
+          <svg viewBox={`0 0 ${points.w} ${points.h}`} className="h-32 sm:h-44 w-full" role="img" aria-label="Gráfico de vendas">
             <defs>
               <linearGradient id="salesLine" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" stopColor="rgb(59,130,246)" stopOpacity="0.9" />
@@ -180,7 +180,7 @@ export default function DashboardPage() {
           </svg>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
             <div className="text-xs font-semibold text-slate-400">Lucro de hoje</div>
             <div className="mt-1 text-lg font-semibold text-white">

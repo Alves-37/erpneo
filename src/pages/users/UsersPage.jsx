@@ -41,6 +41,8 @@ export default function UsersPage() {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
 
+  const [actionsUser, setActionsUser] = useState(null)
+
   const [formData, setFormData] = useState({
     name: '',
     username: '',
@@ -158,42 +160,34 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <div className="text-xl font-semibold">Usuários</div>
+          <div className="text-lg sm:text-xl font-semibold">Usuários</div>
           <div className="mt-1 text-sm text-slate-300">Gerencie os funcionários da empresa</div>
         </div>
         <button
           type="button"
           onClick={openCreate}
-          className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2 text-sm font-semibold text-white"
+          className="w-full sm:w-auto rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2 text-sm font-semibold text-white"
         >
           Novo Usuário
         </button>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-        <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
-          <>
-            <div className="col-span-3">Nome</div>
-            <div className="col-span-3">Username</div>
-            <div className="col-span-3">Status</div>
-            <div className="col-span-3 text-right">Ações</div>
-          </>
-        </div>
-
-        {loading ? (
-          <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
-        ) : rows.length ? (
-          <div className="divide-y divide-slate-800">
-            {rows.map((r) => (
-              <div key={r.id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm">
-                <>
-                  <div className="col-span-3 font-semibold text-slate-100">{r.name}</div>
-                  <div className="col-span-3 text-slate-300">{r.username}</div>
-                  <div className="col-span-3">
+      {loading ? (
+        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-6 text-sm text-slate-300">Carregando...</div>
+      ) : rows.length ? (
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {rows.map((r) => (
+            <div key={r.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-semibold text-white truncate" title={r.name || ''}>
+                      {r.name}
+                    </div>
                     <span
-                      className={`inline-flex rounded-xl border px-3 py-1.5 text-[11px] font-semibold ${
+                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                         r.is_active
                           ? 'border-emerald-900/60 bg-emerald-950/30 text-emerald-200'
                           : 'border-rose-900/60 bg-rose-950/30 text-rose-200'
@@ -202,39 +196,81 @@ export default function UsersPage() {
                       {r.is_active ? 'Ativo' : 'Inativo'}
                     </span>
                   </div>
-                  <div className="col-span-3 flex justify-end gap-2">
-                    <button
-                      type="button"
-                      className="rounded-xl border border-slate-700 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100"
-                      onClick={() => toggleActive(r)}
-                    >
-                      {r.is_active ? 'Desativar' : 'Ativar'}
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-xl border border-slate-700 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100"
-                      onClick={() => openEdit(r)}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200"
-                      onClick={() => handleDelete(r)}
-                    >
-                      Excluir
-                    </button>
+                  <div className="mt-1 text-xs text-slate-400 truncate" title={r.email || ''}>
+                    {r.email || '-'}
                   </div>
-                </>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
+                    <div className="truncate" title={r.username || ''}>
+                      <span className="text-slate-500">@</span>{r.username || '-'}
+                    </div>
+                    <div className="truncate" title={r.role || ''}>
+                      <span className="text-slate-500">Role:</span> {r.role || '-'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="shrink-0 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100"
+                  onClick={() => setActionsUser(r)}
+                >
+                  Ações
+                </button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="px-4 py-6 text-sm text-slate-300">
-            Nenhum usuário encontrado.
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-6 text-sm text-slate-300">Nenhum usuário encontrado.</div>
+      )}
+
+      <Modal open={Boolean(actionsUser)} title={actionsUser?.name ? `Ações · ${actionsUser.name}` : 'Ações'} onClose={() => setActionsUser(null)}>
+        <div className="grid gap-2">
+          <button
+            type="button"
+            className="w-full rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100"
+            onClick={() => {
+              const u = actionsUser
+              setActionsUser(null)
+              if (!u) return
+              toggleActive(u)
+            }}
+          >
+            {actionsUser?.is_active ? 'Desativar' : 'Ativar'}
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100"
+            onClick={() => {
+              const u = actionsUser
+              setActionsUser(null)
+              if (!u) return
+              openEdit(u)
+            }}
+          >
+            Editar
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-4 py-3 text-sm font-semibold text-rose-200"
+            onClick={() => {
+              const u = actionsUser
+              setActionsUser(null)
+              if (!u) return
+              handleDelete(u)
+            }}
+          >
+            Excluir
+          </button>
+          <button
+            type="button"
+            className="w-full rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100"
+            onClick={() => setActionsUser(null)}
+          >
+            Cancelar
+          </button>
+        </div>
+      </Modal>
 
       <Modal
         open={openModal}

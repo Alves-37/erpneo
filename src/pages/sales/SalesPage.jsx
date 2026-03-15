@@ -194,15 +194,15 @@ export default function SalesPage() {
 
   return (
     <div className="h-[calc(100vh-56px-48px)] overflow-hidden flex flex-col">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <div className="text-xl font-semibold">Vendas</div>
+          <div className="text-lg sm:text-xl font-semibold">Vendas</div>
           <div className="mt-1 text-sm text-slate-300">Histórico e resumo</div>
         </div>
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
+          className="w-full sm:w-auto rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
         >
           Atualizar
         </button>
@@ -231,59 +231,129 @@ export default function SalesPage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto">
-          <table className="min-w-full text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur text-slate-300">
-              <tr>
-                <th className="px-5 py-3 text-left font-semibold">ID</th>
-                <th className="px-5 py-3 text-left font-semibold">Caixa</th>
-                <th className="px-5 py-3 text-left font-semibold">Data</th>
-                <th className="px-5 py-3 text-left font-semibold">Tipo</th>
-                <th className="px-5 py-3 text-left font-semibold">Mesa</th>
-                <th className="px-5 py-3 text-left font-semibold">Pagamento</th>
-                <th className="px-5 py-3 text-right font-semibold">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {(sales || []).map((s) => (
-                <tr
-                  key={s.id}
-                  className="hover:bg-slate-950/40 cursor-pointer"
-                  onClick={() => {
-                    setActiveSale(s)
-                    setOpenDetails(true)
-                  }}
-                >
-                  <td className="px-5 py-3 text-slate-200">#{s.id}</td>
-                  <td className="px-5 py-3 text-slate-200">{s?.cashier_name || '-'}</td>
-                  <td className="px-5 py-3 text-slate-200">{s?.created_at ? fmtDateTime.format(new Date(s.created_at)) : '-'}</td>
-                  <td className="px-5 py-3">
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                        (s?.sale_channel || '').toLowerCase() === 'table'
-                          ? 'border-indigo-900/60 bg-indigo-950/40 text-indigo-200'
-                          : 'border-slate-800 bg-slate-950 text-slate-200'
-                      }`}
-                    >
-                      {saleChannelLabel[(s?.sale_channel || '').toLowerCase()] || (s?.sale_channel || '-')}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-slate-200">
-                    {(s?.sale_channel || '').toLowerCase() === 'table' ? `Mesa ${s?.table_number ?? '-'} · ${s?.seat_number ?? '-'}` : '-'}
-                  </td>
-                  <td className="px-5 py-3 text-slate-200">{s?.payment_method || '-'}</td>
-                  <td className="px-5 py-3 text-right font-semibold text-white">{fmtMoney.format(Number(s?.total || 0))}</td>
-                </tr>
-              ))}
+          <div className="md:hidden p-4">
+            {loading ? (
+              <div className="py-6 text-sm text-slate-300">Carregando...</div>
+            ) : sales?.length ? (
+              <div className="grid gap-3">
+                {(sales || []).map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="w-full text-left rounded-2xl border border-slate-800 bg-slate-950 p-4 hover:bg-slate-900"
+                    onClick={() => {
+                      setActiveSale(s)
+                      setOpenDetails(true)
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">Venda #{s.id}</div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          {s?.created_at ? fmtDateTime.format(new Date(s.created_at)) : '-'}
+                        </div>
+                      </div>
 
-              {!loading && (!sales || sales.length === 0) && (
+                      <div className="shrink-0 text-sm font-semibold text-white">
+                        {fmtMoney.format(Number(s?.total || 0))}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-[11px] font-semibold text-slate-400">Caixa</div>
+                        <div className="mt-1 text-sm text-slate-200 truncate">{s?.cashier_name || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] font-semibold text-slate-400">Pagamento</div>
+                        <div className="mt-1 text-sm text-slate-200 truncate">{s?.payment_method || '-'}</div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] font-semibold text-slate-400">Tipo</div>
+                        <div className="mt-1">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                              (s?.sale_channel || '').toLowerCase() === 'table'
+                                ? 'border-indigo-900/60 bg-indigo-950/40 text-indigo-200'
+                                : 'border-slate-800 bg-slate-950 text-slate-200'
+                            }`}
+                          >
+                            {saleChannelLabel[(s?.sale_channel || '').toLowerCase()] || (s?.sale_channel || '-')}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] font-semibold text-slate-400">Mesa</div>
+                        <div className="mt-1 text-sm text-slate-200 truncate">
+                          {(s?.sale_channel || '').toLowerCase() === 'table'
+                            ? `Mesa ${s?.table_number ?? '-'} · ${s?.seat_number ?? '-'}`
+                            : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 text-sm text-slate-400">Sem vendas para mostrar</div>
+            )}
+          </div>
+
+          <div className="hidden md:block">
+            <table className="min-w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur text-slate-300">
                 <tr>
-                  <td className="px-5 py-6 text-center text-slate-400" colSpan={7}>
-                    Sem vendas para mostrar
-                  </td>
+                  <th className="px-5 py-3 text-left font-semibold">ID</th>
+                  <th className="px-5 py-3 text-left font-semibold">Caixa</th>
+                  <th className="px-5 py-3 text-left font-semibold">Data</th>
+                  <th className="px-5 py-3 text-left font-semibold">Tipo</th>
+                  <th className="px-5 py-3 text-left font-semibold">Mesa</th>
+                  <th className="px-5 py-3 text-left font-semibold">Pagamento</th>
+                  <th className="px-5 py-3 text-right font-semibold">Total</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {(sales || []).map((s) => (
+                  <tr
+                    key={s.id}
+                    className="hover:bg-slate-950/40 cursor-pointer"
+                    onClick={() => {
+                      setActiveSale(s)
+                      setOpenDetails(true)
+                    }}
+                  >
+                    <td className="px-5 py-3 text-slate-200">#{s.id}</td>
+                    <td className="px-5 py-3 text-slate-200">{s?.cashier_name || '-'}</td>
+                    <td className="px-5 py-3 text-slate-200">{s?.created_at ? fmtDateTime.format(new Date(s.created_at)) : '-'}</td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                          (s?.sale_channel || '').toLowerCase() === 'table'
+                            ? 'border-indigo-900/60 bg-indigo-950/40 text-indigo-200'
+                            : 'border-slate-800 bg-slate-950 text-slate-200'
+                        }`}
+                      >
+                        {saleChannelLabel[(s?.sale_channel || '').toLowerCase()] || (s?.sale_channel || '-')}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-slate-200">
+                      {(s?.sale_channel || '').toLowerCase() === 'table' ? `Mesa ${s?.table_number ?? '-'} · ${s?.seat_number ?? '-'}` : '-'}
+                    </td>
+                    <td className="px-5 py-3 text-slate-200">{s?.payment_method || '-'}</td>
+                    <td className="px-5 py-3 text-right font-semibold text-white">{fmtMoney.format(Number(s?.total || 0))}</td>
+                  </tr>
+                ))}
+
+                {!loading && (!sales || sales.length === 0) && (
+                  <tr>
+                    <td className="px-5 py-6 text-center text-slate-400" colSpan={7}>
+                      Sem vendas para mostrar
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

@@ -41,6 +41,8 @@ export default function StockTransferPage() {
   const [currentStoreQty, setCurrentStoreQty] = useState(null)
   const [currentWarehouseQty, setCurrentWarehouseQty] = useState(null)
 
+  const [recentColsView, setRecentColsView] = useState('when_product')
+
   const locationById = useMemo(() => {
     const map = new Map()
     for (const l of locations || []) map.set(String(l.id), l)
@@ -295,40 +297,111 @@ export default function StockTransferPage() {
       </div>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-        <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
-          <div className="col-span-3">Data</div>
-          <div className="col-span-3">Produto</div>
-          <div className="col-span-3">Origem</div>
-          <div className="col-span-3">Destino</div>
+        <div className="border-b border-slate-800 px-4 py-3">
+          <div className="text-sm font-semibold text-white">Transferências recentes</div>
+          <div className="mt-1 text-xs text-slate-400">Últimas 50 transferências</div>
+
+          <div className="mt-3 md:hidden">
+            <select
+              value={recentColsView}
+              onChange={(e) => setRecentColsView(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+            >
+              <option value="when_product">Data + Produto</option>
+              <option value="from_to">Origem + Destino</option>
+            </select>
+          </div>
         </div>
 
-        {loading ? (
-          <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
-        ) : recent.length ? (
-          <div className="divide-y divide-slate-800">
-            {recent.map((t) => {
-              const p = productById.get(String(t.product_id))
-              const from = locationById.get(String(t.from_location_id))
-              const to = locationById.get(String(t.to_location_id))
-              return (
-                <div key={t.id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm">
-                  <div className="col-span-3 text-slate-300">{fmtDateTime(t.created_at)}</div>
-                  <div className="col-span-3 text-slate-100 font-medium truncate" title={p?.name || ''}>
-                    {p?.name || `#${t.product_id}`}
-                  </div>
-                  <div className="col-span-3 text-slate-300 truncate" title={from?.name || ''}>
-                    {from ? `${from.type === 'store' ? 'Loja' : 'Armazém'} · ${from.name}` : `#${t.from_location_id}`}
-                  </div>
-                  <div className="col-span-3 text-slate-300 truncate" title={to?.name || ''}>
-                    {to ? `${to.type === 'store' ? 'Loja' : 'Armazém'} · ${to.name}` : `#${t.to_location_id}`}
-                  </div>
-                </div>
-              )
-            })}
+        {/* Mobile: only 2 columns at a time */}
+        <div className="md:hidden">
+          <div className="grid grid-cols-2 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
+            {recentColsView === 'from_to' ? (
+              <>
+                <div>Origem</div>
+                <div>Destino</div>
+              </>
+            ) : (
+              <>
+                <div>Data</div>
+                <div>Produto</div>
+              </>
+            )}
           </div>
-        ) : (
-          <div className="px-4 py-6 text-sm text-slate-300">Nenhuma transferência registrada.</div>
-        )}
+
+          {loading ? (
+            <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
+          ) : recent.length ? (
+            <div className="divide-y divide-slate-800">
+              {recent.map((t) => {
+                const p = productById.get(String(t.product_id))
+                const from = locationById.get(String(t.from_location_id))
+                const to = locationById.get(String(t.to_location_id))
+                return (
+                  <div key={t.id} className="grid grid-cols-2 gap-3 px-4 py-3 text-sm">
+                    {recentColsView === 'from_to' ? (
+                      <>
+                        <div className="text-slate-300 truncate" title={from?.name || ''}>
+                          {from ? `${from.type === 'store' ? 'Loja' : 'Armazém'} · ${from.name}` : `#${t.from_location_id}`}
+                        </div>
+                        <div className="text-slate-300 truncate" title={to?.name || ''}>
+                          {to ? `${to.type === 'store' ? 'Loja' : 'Armazém'} · ${to.name}` : `#${t.to_location_id}`}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-slate-300">{fmtDateTime(t.created_at)}</div>
+                        <div className="text-slate-100 font-medium truncate" title={p?.name || ''}>
+                          {p?.name || `#${t.product_id}`}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="px-4 py-6 text-sm text-slate-300">Nenhuma transferência registrada.</div>
+          )}
+        </div>
+
+        {/* Desktop: full table */}
+        <div className="hidden md:block">
+          <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
+            <div className="col-span-3">Data</div>
+            <div className="col-span-3">Produto</div>
+            <div className="col-span-3">Origem</div>
+            <div className="col-span-3">Destino</div>
+          </div>
+
+          {loading ? (
+            <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
+          ) : recent.length ? (
+            <div className="divide-y divide-slate-800">
+              {recent.map((t) => {
+                const p = productById.get(String(t.product_id))
+                const from = locationById.get(String(t.from_location_id))
+                const to = locationById.get(String(t.to_location_id))
+                return (
+                  <div key={t.id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm">
+                    <div className="col-span-3 text-slate-300">{fmtDateTime(t.created_at)}</div>
+                    <div className="col-span-3 text-slate-100 font-medium truncate" title={p?.name || ''}>
+                      {p?.name || `#${t.product_id}`}
+                    </div>
+                    <div className="col-span-3 text-slate-300 truncate" title={from?.name || ''}>
+                      {from ? `${from.type === 'store' ? 'Loja' : 'Armazém'} · ${from.name}` : `#${t.from_location_id}`}
+                    </div>
+                    <div className="col-span-3 text-slate-300 truncate" title={to?.name || ''}>
+                      {to ? `${to.type === 'store' ? 'Loja' : 'Armazém'} · ${to.name}` : `#${t.to_location_id}`}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="px-4 py-6 text-sm text-slate-300">Nenhuma transferência registrada.</div>
+          )}
+        </div>
       </div>
     </div>
   )

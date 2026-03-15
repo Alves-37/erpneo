@@ -139,7 +139,7 @@ export default function OrdersPage() {
           (products || []).map(async (p) => {
             try {
               const imgs = await listProductImages(p.id)
-              const first = imgs?.[0]?.file_path || null
+              const first = imgs?.[0]?.url || imgs?.[0]?.file_path || null
               return [p.id, first]
             } catch {
               return [p.id, null]

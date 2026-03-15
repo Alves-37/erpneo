@@ -20,6 +20,7 @@ const nav = [
   { to: '/reports', label: 'Relatórios' },
   { to: '/users', label: 'Usuários' },
   { to: '/settings', label: 'Configurações' },
+  { to: '/logout', label: 'Logout', isLogout: true },
 ]
 
 const businessTypeLabel = {
@@ -35,6 +36,7 @@ const businessTypeLabel = {
 
 export default function DashboardLayout() {
   const [logoutOpen, setLogoutOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [branches, setBranches] = useState([])
   const [switchingBranch, setSwitchingBranch] = useState(false)
   const navigate = useNavigate()
@@ -92,8 +94,23 @@ export default function DashboardLayout() {
 
   return (
     <div className="h-screen overflow-hidden bg-slate-950 text-slate-100">
-      <div className="flex h-screen overflow-hidden">
-        <aside className="w-72 bg-slate-900 border-r border-slate-800 h-screen overflow-y-auto p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.4)]">
+      <div className="flex h-screen overflow-hidden relative">
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        
+        {/* Sidebar */}
+        <aside className={`
+          fixed lg:static inset-y-0 left-0 z-50 
+          w-72 bg-slate-900 border-r border-slate-800 
+          h-screen overflow-y-auto p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.4)]
+          transform transition-transform duration-300 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}>
           <div>
             <div className="font-semibold text-xl text-white tracking-wide">NEO ERP</div>
             <div className="text-sm text-slate-400 mt-1">Neotrix Tecnologias</div>
@@ -110,45 +127,77 @@ export default function DashboardLayout() {
                   item.to === '/sales' ||
                   item.to === '/pdv' ||
                   item.to === '/orders' ||
-                  item.to === '/tables'
+                  item.to === '/tables' ||
+                  item.to === '/logout'
                 )
               })
               .map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `px-4 py-3 rounded-xl text-base font-semibold transition-all duration-150 ${
-                      isActive
-                        ? 'bg-brand-600 text-white shadow-sm'
-                        : 'text-slate-200 bg-slate-900 hover:bg-slate-800 hover:text-white'
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
+                item.isLogout ? (
+                  <button
+                    key={item.to}
+                    onClick={() => {
+                      setSidebarOpen(false)
+                      setLogoutOpen(true)
+                    }}
+                    className="px-4 py-3 rounded-xl text-base font-semibold transition-all duration-150 bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-sm hover:from-rose-500 hover:to-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/60"
+                  >
+                    {item.label}
+                  </button>
+                ) : (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) =>
+                      `px-4 py-3 rounded-xl text-base font-semibold transition-all duration-150 ${
+                        isActive
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'text-slate-200 bg-slate-900 hover:bg-slate-800 hover:text-white'
+                      }`
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                )
               ))}
           </nav>
 
           <div className="mt-6 h-px w-full bg-slate-800" />
+          
+          {/* Mobile close button */}
+          <div className="lg:hidden mt-6">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="w-full px-4 py-3 rounded-xl text-base font-semibold transition-all duration-150 bg-slate-800 text-slate-200 hover:bg-slate-700"
+            >
+              Fechar menu
+            </button>
+          </div>
         </aside>
 
         <main className="flex-1 h-screen overflow-hidden">
           <div className="flex h-screen flex-col overflow-hidden">
-          <header className="h-14 shrink-0 bg-slate-950 border-b border-slate-800 flex items-center px-6 gap-4">
-            <div className="text-lg font-semibold text-slate-200">
-              {me?.name ? `${me.name} · ${me.role || 'user'}` : 'Online-first'}
+          <header className="h-14 shrink-0 flex items-center justify-between px-4 lg:px-6 mx-3 mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg backdrop-blur lg:mx-0 lg:mt-0 lg:rounded-none lg:border-x-0 lg:border-t-0 lg:bg-slate-950 lg:shadow-none">
+            {/* Mobile menu button */}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            
+            <div className="ml-2 lg:ml-0">
+              <div className="text-sm lg:text-lg font-semibold text-slate-200 truncate">
+                {me?.name ? `${me.name} · ${me.role || 'user'}` : 'Online-first'}
+              </div>
             </div>
 
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setLogoutOpen(true)}
-                className="px-3 py-2 rounded-xl text-sm font-semibold transition-all duration-150 bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-sm hover:from-rose-500 hover:to-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/60"
-              >
-                Logout
-              </button>
-              <div className="text-xs font-semibold text-slate-400">Filial</div>
+            <div className="ml-auto mr-2 lg:mr-0 flex items-center gap-3">
+              <div className="hidden lg:block text-xs font-semibold text-slate-400">Filial</div>
               <select
                 value={branch?.id ? String(branch.id) : ''}
                 disabled={switchingBranch || !branches?.length}
@@ -171,7 +220,7 @@ export default function DashboardLayout() {
                     setSwitchingBranch(false)
                   }
                 }}
-                className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
+                className="rounded-xl border border-slate-800 bg-slate-950 px-2 lg:px-3 py-2 text-xs lg:text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60 min-w-0 max-w-[80px] lg:max-w-none"
               >
                 {!branches?.length ? <option value="">Sem filiais</option> : null}
                 {(branches || []).map((b) => (
@@ -182,7 +231,7 @@ export default function DashboardLayout() {
               </select>
             </div>
           </header>
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-950 text-slate-100">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-950 text-slate-100">
             <Outlet />
           </div>
           </div>
@@ -192,7 +241,7 @@ export default function DashboardLayout() {
       {logoutOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl">
-            <div className="p-5">
+            <div className="p-4 sm:p-5">
               <div className="text-lg font-semibold text-white">Confirmar logout</div>
               <div className="mt-2 text-sm text-slate-300">
                 Ricardo, tem a certeza que quer fazer logout?

@@ -235,20 +235,20 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Docs emitidos</div>
               <div className="mt-1 text-lg font-semibold text-white">{z?.docs_issued ?? 0}</div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Docs anulados</div>
               <div className="mt-1 text-lg font-semibold text-white">{z?.docs_cancelled ?? 0}</div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">IVA</div>
               <div className="mt-1 text-lg font-semibold text-white">{Number(z?.tax_total ?? 0).toFixed(2)}</div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Total</div>
               <div className="mt-1 text-lg font-semibold text-white">{Number(z?.gross_total ?? 0).toFixed(2)}</div>
             </div>
@@ -257,62 +257,124 @@ export default function ReportsPage() {
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
               <div className="border-b border-slate-800 px-4 py-3 text-sm font-semibold text-white">Por tipo</div>
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-900/60 text-xs text-slate-300">
-                  <tr>
-                    <th className="px-4 py-3">Tipo</th>
-                    <th className="px-4 py-3">Qtd</th>
-                    <th className="px-4 py-3">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(z?.by_type || []).map((r) => (
-                    <tr key={r.document_type} className="border-t border-slate-800">
-                      <td className="px-4 py-3 text-slate-200">{r.document_type}</td>
-                      <td className="px-4 py-3 text-slate-200">{r.count}</td>
-                      <td className="px-4 py-3 text-slate-200">{Number(r.gross_total || 0).toFixed(2)}</td>
+
+              <div className="md:hidden p-4">
+                {(z?.by_type || []).length ? (
+                  <div className="grid gap-2">
+                    {(z?.by_type || []).map((r) => (
+                      <div key={r.document_type} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-white truncate" title={r.document_type || ''}>
+                              {r.document_type}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-400">Qtd: {r.count ?? 0}</div>
+                          </div>
+                          <div className="shrink-0 text-sm font-semibold text-slate-100">
+                            {Number(r.gross_total || 0).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400">Sem dados</div>
+                )}
+              </div>
+
+              <div className="hidden md:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-900/60 text-xs text-slate-300">
+                    <tr>
+                      <th className="px-4 py-3">Tipo</th>
+                      <th className="px-4 py-3">Qtd</th>
+                      <th className="px-4 py-3">Total</th>
                     </tr>
-                  ))}
-                  {!((z?.by_type || []).length) ? (
-                    <tr className="border-t border-slate-800">
-                      <td className="px-4 py-4 text-slate-400" colSpan={3}>
-                        Sem dados
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(z?.by_type || []).map((r) => (
+                      <tr key={r.document_type} className="border-t border-slate-800">
+                        <td className="px-4 py-3 text-slate-200">{r.document_type}</td>
+                        <td className="px-4 py-3 text-slate-200">{r.count}</td>
+                        <td className="px-4 py-3 text-slate-200">{Number(r.gross_total || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    {!((z?.by_type || []).length) ? (
+                      <tr className="border-t border-slate-800">
+                        <td className="px-4 py-4 text-slate-400" colSpan={3}>
+                          Sem dados
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
               <div className="border-b border-slate-800 px-4 py-3 text-sm font-semibold text-white">IVA por taxa</div>
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-900/60 text-xs text-slate-300">
-                  <tr>
-                    <th className="px-4 py-3">Taxa</th>
-                    <th className="px-4 py-3">Incidência</th>
-                    <th className="px-4 py-3">IVA</th>
-                    <th className="px-4 py-3">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(z?.vat_by_rate || []).map((r) => (
-                    <tr key={r.tax_rate} className="border-t border-slate-800">
-                      <td className="px-4 py-3 text-slate-200">{Number(r.tax_rate || 0).toFixed(2)}%</td>
-                      <td className="px-4 py-3 text-slate-200">{Number(r.net_total || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-slate-200">{Number(r.tax_total || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-slate-200">{Number(r.gross_total || 0).toFixed(2)}</td>
+
+              <div className="md:hidden p-4">
+                {(z?.vat_by_rate || []).length ? (
+                  <div className="grid gap-2">
+                    {(z?.vat_by_rate || []).map((r) => (
+                      <div key={r.tax_rate} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-white">{Number(r.tax_rate || 0).toFixed(2)}%</div>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              <div>
+                                <div className="text-[11px] font-semibold text-slate-400">Incidência</div>
+                                <div className="mt-0.5 text-sm text-slate-200">{Number(r.net_total || 0).toFixed(2)}</div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] font-semibold text-slate-400">IVA</div>
+                                <div className="mt-0.5 text-sm text-slate-200">{Number(r.tax_total || 0).toFixed(2)}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-sm font-semibold text-slate-100">
+                            {Number(r.gross_total || 0).toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="mt-2 text-[11px] text-slate-400">Total</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400">Sem dados</div>
+                )}
+              </div>
+
+              <div className="hidden md:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-900/60 text-xs text-slate-300">
+                    <tr>
+                      <th className="px-4 py-3">Taxa</th>
+                      <th className="px-4 py-3">Incidência</th>
+                      <th className="px-4 py-3">IVA</th>
+                      <th className="px-4 py-3">Total</th>
                     </tr>
-                  ))}
-                  {!((z?.vat_by_rate || []).length) ? (
-                    <tr className="border-t border-slate-800">
-                      <td className="px-4 py-4 text-slate-400" colSpan={4}>
-                        Sem dados
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(z?.vat_by_rate || []).map((r) => (
+                      <tr key={r.tax_rate} className="border-t border-slate-800">
+                        <td className="px-4 py-3 text-slate-200">{Number(r.tax_rate || 0).toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-slate-200">{Number(r.net_total || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-slate-200">{Number(r.tax_total || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-slate-200">{Number(r.gross_total || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    {!((z?.vat_by_rate || []).length) ? (
+                      <tr className="border-t border-slate-800">
+                        <td className="px-4 py-4 text-slate-400" colSpan={4}>
+                          Sem dados
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -482,20 +544,20 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Vendas</div>
               <div className="mt-1 text-lg font-semibold text-white">{sales?.sales_count ?? 0}</div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Líquido</div>
               <div className="mt-1 text-lg font-semibold text-white">{Number(sales?.net_total ?? 0).toFixed(2)}</div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">IVA</div>
               <div className="mt-1 text-lg font-semibold text-white">{Number(sales?.tax_total ?? 0).toFixed(2)}</div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Total</div>
               <div className="mt-1 text-lg font-semibold text-white">{Number(sales?.gross_total ?? 0).toFixed(2)}</div>
             </div>
@@ -601,20 +663,20 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Vendas</div>
               <div className="mt-1 text-lg font-semibold text-white">{closure?.sales_count ?? 0}</div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Líquido</div>
               <div className="mt-1 text-lg font-semibold text-white">{Number(closure?.net_total ?? 0).toFixed(2)}</div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">IVA</div>
               <div className="mt-1 text-lg font-semibold text-white">{Number(closure?.tax_total ?? 0).toFixed(2)}</div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 sm:p-4">
               <div className="text-xs font-semibold text-slate-400">Total</div>
               <div className="mt-1 text-lg font-semibold text-white">{Number(closure?.gross_total ?? 0).toFixed(2)}</div>
             </div>

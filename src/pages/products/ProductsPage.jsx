@@ -67,6 +67,7 @@ export default function ProductsPage() {
 
   const [openCreate, setOpenCreate] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [restaurantActionsProduct, setRestaurantActionsProduct] = useState(null)
 
   const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false)
   const [deletingProduct, setDeletingProduct] = useState(null)
@@ -166,8 +167,8 @@ export default function ProductsPage() {
     return map
   }, [categories])
 
-  async function load() {
-    setLoading(true)
+  async function load({ silent = false } = {}) {
+    if (!silent) setLoading(true)
     try {
       if (!token) {
         setItems([])
@@ -189,7 +190,7 @@ export default function ProductsPage() {
     } catch {
       toast.error('Não foi possível carregar produtos agora.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -230,7 +231,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      load()
+      load({ silent: true })
     }, 300)
 
     return () => clearTimeout(t)
@@ -411,35 +412,17 @@ export default function ProductsPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <div className="text-xl font-semibold">Produtos</div>
+          <div className="text-lg sm:text-xl font-semibold">Produtos</div>
           <div className="mt-1 text-sm text-slate-300">
             Tipo de estabelecimento: <span className="text-slate-100">{businessType}</span>
           </div>
         </div>
-
-        <button
-          onClick={() => {
-            resetForm()
-            loadCategories(businessType)
-            setEditingId(null)
-            if (businessType === 'grocery' || businessType === 'fish' || businessType === 'grocery_fish') {
-              setUnit('kg')
-              setUnitMode('preset')
-              setUnitCustom('')
-            }
-            setOpenCreate(true)
-          }}
-          className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white"
-          type="button"
-        >
-          Novo produto
-        </button>
       </div>
 
-      <div className="mt-6 flex items-center gap-3">
-        <div className="relative w-full max-w-md">
+      <div className="mt-6 grid gap-3">
+        <div className="relative w-full sm:max-w-md">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
             <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
               <path
@@ -466,34 +449,49 @@ export default function ProductsPage() {
             type="text"
           />
         </div>
-        <button
-          onClick={() => load()}
-          className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
-          type="button"
-        >
-          Buscar
-        </button>
 
-        <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-          <input
-            type="checkbox"
-            checked={onlyLowStock}
-            onChange={(e) => setOnlyLowStock(e.target.checked)}
-            disabled={showInactiveOnly}
-            className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
-          />
-          Baixo estoque
-        </label>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={onlyLowStock}
+                onChange={(e) => setOnlyLowStock(e.target.checked)}
+                disabled={showInactiveOnly}
+                className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+              />
+              Baixo estoque
+            </label>
 
-        <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-          <input
-            type="checkbox"
-            checked={showInactiveOnly}
-            onChange={(e) => setShowInactiveOnly(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
-          />
-          Inativos
-        </label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={showInactiveOnly}
+                onChange={(e) => setShowInactiveOnly(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+              />
+              Inativos
+            </label>
+          </div>
+
+          <button
+            onClick={() => {
+              resetForm()
+              loadCategories(businessType)
+              setEditingId(null)
+              if (businessType === 'grocery' || businessType === 'fish' || businessType === 'grocery_fish') {
+                setUnit('kg')
+                setUnitMode('preset')
+                setUnitCustom('')
+              }
+              setOpenCreate(true)
+            }}
+            className="self-end sm:self-auto rounded-xl bg-brand-600 hover:bg-brand-700 px-3 py-2 text-xs sm:text-sm font-semibold text-white"
+            type="button"
+          >
+            Novo produto
+          </button>
+        </div>
       </div>
 
       {isRestaurant ? (
@@ -506,62 +504,46 @@ export default function ProductsPage() {
                 const rawUrl = imageByProductId?.[p.id] || null
                 const url = rawUrl && rawUrl.startsWith('/') ? `${apiBaseUrl}${rawUrl}` : rawUrl
                 return (
-                  <div key={p.id} className="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
+                  <div key={p.id} className="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-sm">
                     <div className="relative aspect-[4/3] w-full bg-slate-900">
                       {url ? (
-                        <img src={url} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+                        <img
+                          src={url}
+                          alt={p.name}
+                          className="h-full w-full object-cover transition-transform duration-300 sm:group-hover:scale-[1.03]"
+                          loading="lazy"
+                        />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">Sem imagem</div>
                       )}
 
-                      <div className="absolute right-2 top-2 rounded-xl bg-brand-600/90 px-2.5 py-1 text-xs font-semibold text-white">
-                        {Number(p.price).toFixed(2)}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-transparent" />
+
+                      <div className="absolute left-2 top-2 rounded-xl border border-slate-700/60 bg-slate-950/60 px-2.5 py-1 text-[11px] font-semibold text-slate-100 backdrop-blur">
+                        {p.is_active ? 'Ativo' : 'Inativo'}
+                      </div>
+
+                      <div className="absolute right-2 top-2 rounded-xl bg-brand-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
+                        {Number(p.price || 0).toFixed(2)}
                       </div>
                     </div>
 
                     <div className="p-3">
-                      <div className="truncate text-sm font-semibold text-slate-100" title={p.name}>
+                      <div className="text-sm font-semibold text-slate-100 leading-5" title={p.name}>
                         {p.name}
                       </div>
-                      <div className="mt-1 truncate text-xs text-slate-400" title={(p.category_id && categoriesById.get(p.category_id)?.name) || ''}>
+                      <div className="mt-1 text-xs text-slate-400 truncate" title={(p.category_id && categoriesById.get(p.category_id)?.name) || ''}>
                         {(p.category_id && categoriesById.get(p.category_id)?.name) || '-'}
                       </div>
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <div className={`text-xs ${p.is_active ? 'text-emerald-300' : 'text-amber-300'}`}>
-                          {p.is_active ? 'Ativo' : 'Inativo'}
-                        </div>
 
-                        <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            className="rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
-                            onClick={() => {
-                              resetForm()
-                              loadCategories(businessType)
-                              setEditingId(p.id)
-                              fillFormFromProduct(p)
-                              setOpenCreate(true)
-                            }}
-                          >
-                            Editar
-                          </button>
-
-                          <button
-                            type="button"
-                            className="rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
-                            onClick={() => onToggleActive(p)}
-                          >
-                            {p.is_active ? 'Desativar' : 'Ativar'}
-                          </button>
-
-                          <button
-                            type="button"
-                            className="rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-1 text-xs text-rose-200"
-                            onClick={() => onDelete(p)}
-                          >
-                            Apagar
-                          </button>
-                        </div>
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => setRestaurantActionsProduct(p)}
+                          className="w-full rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-3 py-2.5 text-sm font-semibold text-slate-100"
+                        >
+                          Ações
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -573,7 +555,77 @@ export default function ProductsPage() {
           )}
         </div>
       ) : (
-        <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+        <>
+        <div className="mt-4 md:hidden rounded-2xl border border-slate-800 bg-slate-900 divide-y divide-slate-800">
+          {loading ? (
+            <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
+          ) : items.length ? (
+            items.map((p) => (
+              <div key={p.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-100 truncate" title={p.name || ''}>
+                      {p.name}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      SKU: <span className="text-slate-200">{p.sku || '-'}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      Código: <span className="text-slate-200">{p.barcode || '-'}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      Unidade: <span className="text-slate-200">{p.unit || 'un'}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      IVA: <span className="text-slate-200">{Number(p.tax_rate || 0).toFixed(2)}%</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      Preço: <span className="text-slate-200">{Number(p.price || 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 text-xs px-2 py-1 rounded-lg border border-slate-800 bg-slate-950 text-slate-200">
+                    {p.is_active ? 'Ativo' : 'Inativo'}
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-2 text-xs text-slate-100"
+                    onClick={() => {
+                      resetForm()
+                      loadCategories(businessType)
+                      setEditingId(p.id)
+                      fillFormFromProduct(p)
+                      setOpenCreate(true)
+                    }}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-2 text-xs text-slate-100"
+                    onClick={() => onToggleActive(p)}
+                  >
+                    {p.is_active ? 'Desativar' : 'Ativar'}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-2 text-xs text-rose-200"
+                    onClick={() => onDelete(p)}
+                  >
+                    Apagar
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="px-4 py-6 text-sm text-slate-300">Nenhum produto encontrado.</div>
+          )}
+        </div>
+
+        <div className="mt-4 hidden md:block overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
           <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
             <>
               <div className="col-span-4">Produto</div>
@@ -644,7 +696,63 @@ export default function ProductsPage() {
             <div className="px-4 py-6 text-sm text-slate-300">Nenhum produto encontrado.</div>
           )}
         </div>
+        </>
       )}
+
+      <Modal open={Boolean(restaurantActionsProduct)} title={restaurantActionsProduct?.name || 'Ações'} onClose={() => setRestaurantActionsProduct(null)}>
+        <div className="grid gap-2">
+          <button
+            type="button"
+            className="w-full rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100"
+            onClick={() => {
+              const p = restaurantActionsProduct
+              setRestaurantActionsProduct(null)
+              if (!p) return
+              resetForm()
+              loadCategories(businessType)
+              setEditingId(p.id)
+              fillFormFromProduct(p)
+              setOpenCreate(true)
+            }}
+          >
+            Editar
+          </button>
+
+          <button
+            type="button"
+            className="w-full rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100"
+            onClick={() => {
+              const p = restaurantActionsProduct
+              setRestaurantActionsProduct(null)
+              if (!p) return
+              onToggleActive(p)
+            }}
+          >
+            {restaurantActionsProduct?.is_active ? 'Desativar' : 'Ativar'}
+          </button>
+
+          <button
+            type="button"
+            className="w-full rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-4 py-3 text-sm font-semibold text-rose-200"
+            onClick={() => {
+              const p = restaurantActionsProduct
+              setRestaurantActionsProduct(null)
+              if (!p) return
+              onDelete(p)
+            }}
+          >
+            Apagar
+          </button>
+
+          <button
+            type="button"
+            className="w-full rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100"
+            onClick={() => setRestaurantActionsProduct(null)}
+          >
+            Cancelar
+          </button>
+        </div>
+      </Modal>
 
       <Modal
         open={openCreate}
