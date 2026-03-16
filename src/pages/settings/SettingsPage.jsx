@@ -497,6 +497,30 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+
+        {isAdmin ? (
+          <div className="rounded-2xl border border-rose-900/60 bg-rose-950/20 p-5">
+            <div className="text-sm font-semibold text-rose-200">Reset do banco de dados</div>
+            <div className="mt-2 text-sm text-rose-100/80">
+              Apaga todos os dados desta empresa. Mantém apenas os usuários admin/owner.
+            </div>
+            <div className="mt-4">
+              <button
+                onClick={() => {
+                  setResetConfirmText('')
+                  setResetProgress(0)
+                  setResetMessage('')
+                  setResetError('')
+                  setOpenResetCompany(true)
+                }}
+                className="rounded-xl bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white"
+                type="button"
+              >
+                Resetar banco
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <Modal open={openCompany} title="Configurar empresa" onClose={() => (saving ? null : setOpenCompany(false))}>
