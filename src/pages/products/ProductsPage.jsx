@@ -282,7 +282,7 @@ export default function ProductsPage() {
     setCost(p?.cost != null ? String(p.cost) : '')
     setTaxRate(p?.tax_rate != null ? String(p.tax_rate) : '')
     setMinStock(p?.min_stock != null ? String(p.min_stock) : '')
-    setStockQty('')
+    setStockQty(p?.stock_qty != null ? String(p.stock_qty) : '')
     setTrackStock(Boolean(p?.track_stock))
     setIsActive(Boolean(p?.is_active))
 
