@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 
 import { listCompanies } from '../../api/companies.js'
 import { updateMyCompany, uploadMyCompanyLogo } from '../../api/companySettings.js'
-import { getMyBranch, updateMyBranchPublicMenu } from '../../api/branches.js'
+import { getMyBranch, listBranches, updateMyBranchPublicMenu } from '../../api/branches.js'
 import { changePassword, updateMe } from '../../api/me.js'
 import { toast } from '../../services/toast.js'
+import { useAuthStore } from '../../store/authStore.js'
 
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
@@ -39,6 +40,8 @@ export default function SettingsPage() {
   const [branch, setBranch] = useState(null)
   const [saving, setSaving] = useState(false)
 
+  const bumpContext = useAuthStore((s) => s.bumpContext)
+
   const [me, setMe] = useState(null)
   const [profileName, setProfileName] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
@@ -64,6 +67,11 @@ export default function SettingsPage() {
   const [openSecurity, setOpenSecurity] = useState(false)
   const [openPublicMenu, setOpenPublicMenu] = useState(false)
 
+  const [openBranchVisibility, setOpenBranchVisibility] = useState(false)
+  const [branchesList, setBranchesList] = useState([])
+  const [visibleBranchIds, setVisibleBranchIds] = useState([])
+  const [savingBranchVisibility, setSavingBranchVisibility] = useState(false)
+
   const [publicMenuEnabled, setPublicMenuEnabled] = useState(false)
   const [publicMenuSubdomain, setPublicMenuSubdomain] = useState('')
   const [publicMenuCustomDomain, setPublicMenuCustomDomain] = useState('')
@@ -80,6 +88,20 @@ export default function SettingsPage() {
 
         const b = await getMyBranch()
         setBranch(b)
+
+        try {
+          const key = b?.company_id ? `visible_branch_ids:${b.company_id}` : 'visible_branch_ids'
+          const raw = localStorage.getItem(key)
+          if (raw) {
+            const arr = JSON.parse(raw)
+            if (Array.isArray(arr)) {
+              const ids = arr.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
+              setVisibleBranchIds(ids)
+            }
+          }
+        } catch {
+          // ignore
+        }
 
         setPublicMenuEnabled(Boolean(b?.public_menu_enabled))
         setPublicMenuSubdomain(b?.public_menu_subdomain || '')
@@ -106,6 +128,67 @@ export default function SettingsPage() {
        mounted = false
      }
    }, [])
+
+  async function openBranchVisibilityModal() {
+    setOpenBranchVisibility(true)
+    try {
+      const rows = await listBranches()
+      const normalized = Array.isArray(rows) ? rows : []
+      setBranchesList(normalized)
+
+      // Se ainda não tiver seleção salva, começar com "todas marcadas" (default = mostrar tudo)
+      if (!visibleBranchIds?.length) {
+        // deixar vazio significa "sem filtro" quando salvamos (removendo a chave)
+        // mas no UI marcamos todas
+        setVisibleBranchIds(normalized.map((x) => Number(x.id)).filter((n) => Number.isFinite(n) && n > 0))
+      }
+    } catch {
+      setBranchesList([])
+      toast.error('Não foi possível carregar filiais agora.')
+    }
+  }
+
+  async function onSaveBranchVisibility() {
+    if (!branch?.company_id) {
+      toast.error('Empresa não encontrada.')
+      return
+    }
+    setSavingBranchVisibility(true)
+    try {
+      const key = `visible_branch_ids:${branch.company_id}`
+      const allIds = (branchesList || []).map((x) => Number(x.id)).filter((n) => Number.isFinite(n) && n > 0)
+
+      // Garantir que a filial atual sempre esteja visível (para não "sumir" do seletor)
+      const currentId = branch?.id ? Number(branch.id) : null
+      const next = Array.from(new Set((visibleBranchIds || []).map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)))
+      if (currentId && !next.includes(currentId)) next.push(currentId)
+
+      // Se marcou todas, remover o filtro (default = mostrar tudo)
+      const allSet = new Set(allIds.map(String))
+      const nextSet = new Set(next.map(String))
+      let isAll = true
+      for (const id of allSet) {
+        if (!nextSet.has(id)) {
+          isAll = false
+          break
+        }
+      }
+
+      if (isAll) {
+        localStorage.removeItem(key)
+      } else {
+        localStorage.setItem(key, JSON.stringify(next))
+      }
+
+      toast.success('Filiais do cabeçalho atualizadas.')
+      setOpenBranchVisibility(false)
+      bumpContext()
+    } catch {
+      toast.error('Não foi possível salvar agora.')
+    } finally {
+      setSavingBranchVisibility(false)
+    }
+  }
 
   async function onSavePublicMenu() {
     if (!branch?.id) {
@@ -313,6 +396,22 @@ export default function SettingsPage() {
             </div>
           </div>
         ) : null}
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="text-sm font-semibold text-white">Filiais no cabeçalho</div>
+          <div className="mt-2 text-sm text-slate-300">
+            Escolha quais filiais aparecem no seletor de filial (header). Por padrão, aparecem todas.
+          </div>
+          <div className="mt-4">
+            <button
+              onClick={openBranchVisibilityModal}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white"
+              type="button"
+            >
+              Configurar filiais visíveis
+            </button>
+          </div>
+        </div>
       </div>
 
       <Modal open={openCompany} title="Configurar empresa" onClose={() => (saving ? null : setOpenCompany(false))}>
@@ -580,7 +679,7 @@ export default function SettingsPage() {
               className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
               type="text"
             />
-            <div className="text-xs text-slate-400">Exemplo: menu -> https://menu.vuchada.com</div>
+            <div className="text-xs text-slate-400">Exemplo: menu {'->'} https://menu.vuchada.com</div>
           </label>
 
           <label className="grid gap-2">
@@ -613,6 +712,66 @@ export default function SettingsPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={openBranchVisibility}
+        title="Filiais visíveis no cabeçalho"
+        onClose={() => (savingBranchVisibility ? null : setOpenBranchVisibility(false))}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-300">
+            Marque as filiais que devem aparecer no seletor. Se marcar todas, o sistema volta ao padrão (mostrar todas).
+          </div>
+
+          <div className="max-h-[340px] overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-3">
+            {(branchesList || []).length ? (
+              <div className="grid gap-2">
+                {(branchesList || []).map((b) => {
+                  const id = Number(b.id)
+                  const checked = (visibleBranchIds || []).map(String).includes(String(id))
+                  return (
+                    <label key={b.id} className="flex items-center gap-3 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const next = new Set((visibleBranchIds || []).map(String))
+                          if (e.target.checked) next.add(String(id))
+                          else next.delete(String(id))
+                          setVisibleBranchIds(Array.from(next).map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0))
+                        }}
+                        className="h-4 w-4"
+                      />
+                      <span className="break-words">{b?.name || `Filial ${b.id}`}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="text-sm text-slate-400">Nenhuma filial encontrada.</div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setOpenBranchVisibility(false)}
+              disabled={savingBranchVisibility}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Fechar
+            </button>
+            <button
+              type="button"
+              onClick={onSaveBranchVisibility}
+              disabled={savingBranchVisibility}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {savingBranchVisibility ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

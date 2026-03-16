@@ -36,6 +36,27 @@ const businessTypeLabel = {
   services: 'Serviços',
 }
 
+function _getVisibleBranchIds(companyId) {
+  try {
+    const key = companyId ? `visible_branch_ids:${companyId}` : 'visible_branch_ids'
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return null
+    const ids = arr.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
+    return ids.length ? ids : []
+  } catch {
+    return null
+  }
+}
+
+function _filterBranchesByVisibility(companyId, branches) {
+  const ids = _getVisibleBranchIds(companyId)
+  if (ids === null) return branches
+  const set = new Set(ids.map(String))
+  return (branches || []).filter((b) => b?.id != null && set.has(String(b.id)))
+}
+
 export default function DashboardLayout() {
   const [logoutOpen, setLogoutOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -63,7 +84,10 @@ export default function DashboardLayout() {
       try {
         const [b, list] = await Promise.all([getMyBranch(), listBranches()])
         if (mounted) setBranch(b, { persist: true })
-        if (mounted) setBranches(Array.isArray(list) ? list : [])
+        if (mounted) {
+          const rows = Array.isArray(list) ? list : []
+          setBranches(_filterBranchesByVisibility(b?.company_id, rows))
+        }
       } catch {
         if (mounted) setBranch(null, { persist: true })
         if (mounted) setBranches([])
