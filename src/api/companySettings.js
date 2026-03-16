@@ -15,3 +15,15 @@ export async function uploadMyCompanyLogo(file) {
   })
   return res.data
 }
+
+export async function resetMyCompany(confirmText) {
+  const res = await apiClient.post('/companies/me/reset', {
+    confirm: String(confirmText || ''),
+  })
+  return res.data
+}
+
+export async function getMyCompanyResetStatus() {
+  const res = await apiClient.get('/companies/me/reset/status')
+  return res.data
+}

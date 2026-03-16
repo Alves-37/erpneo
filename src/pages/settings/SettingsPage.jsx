@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { listCompanies } from '../../api/companies.js'
-import { updateMyCompany, uploadMyCompanyLogo } from '../../api/companySettings.js'
+import { getMyCompanyResetStatus, resetMyCompany, updateMyCompany, uploadMyCompanyLogo } from '../../api/companySettings.js'
 import { getMyBranch, listBranches, updateMyBranchPublicMenu } from '../../api/branches.js'
 import { changePassword, updateMe } from '../../api/me.js'
 import { toast } from '../../services/toast.js'
@@ -10,25 +11,47 @@ import { useAuthStore } from '../../store/authStore.js'
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-            <div className="text-sm font-semibold text-white">{title}</div>
-            <button
-              onClick={onClose}
-              className="h-8 w-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-300"
-              type="button"
-              aria-label="Fechar"
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-                <path d="M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
+    <div className="p-4">
+      {resetRunning ? (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/70" />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-2xl">
+              <div className="text-sm font-semibold text-white">Resetando banco de dados...</div>
+              <div className="mt-2 text-xs text-slate-400">{resetMessage || 'Aguarde...'}</div>
+              <div className="mt-4 h-3 w-full rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-brand-600"
+                  style={{ width: `${Math.max(1, Math.min(100, Number(resetProgress || 0)))}%` }}
+                />
+              </div>
+              <div className="mt-2 text-xs text-slate-300">{Math.max(1, Math.min(100, Number(resetProgress || 0)))}%</div>
+              {resetError ? <div className="mt-3 text-xs text-rose-300 break-words">{resetError}</div> : null}
+              <div className="mt-4 text-xs text-slate-400">Durante o reset, o sistema fica bloqueado.</div>
+            </div>
           </div>
-          <div className="p-5">{children}</div>
+        </div>
+      ) : null}
+      <div className="fixed inset-0 z-40">
+        <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+        <div className="absolute inset-0 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+              <div className="text-sm font-semibold text-white">{title}</div>
+              <button
+                onClick={onClose}
+                className="h-8 w-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-300"
+                type="button"
+                aria-label="Fechar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                  <path d="M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5">{children}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -41,6 +64,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
 
   const bumpContext = useAuthStore((s) => s.bumpContext)
+  const logout = useAuthStore((s) => s.logout)
+  const navigate = useNavigate()
 
   const [me, setMe] = useState(null)
   const [profileName, setProfileName] = useState('')
@@ -66,6 +91,7 @@ export default function SettingsPage() {
   const [openProfile, setOpenProfile] = useState(false)
   const [openSecurity, setOpenSecurity] = useState(false)
   const [openPublicMenu, setOpenPublicMenu] = useState(false)
+  const [openResetCompany, setOpenResetCompany] = useState(false)
 
   const [openBranchVisibility, setOpenBranchVisibility] = useState(false)
   const [branchesList, setBranchesList] = useState([])
@@ -76,6 +102,12 @@ export default function SettingsPage() {
   const [publicMenuSubdomain, setPublicMenuSubdomain] = useState('')
   const [publicMenuCustomDomain, setPublicMenuCustomDomain] = useState('')
   const [savingPublicMenu, setSavingPublicMenu] = useState(false)
+
+  const [resetConfirmText, setResetConfirmText] = useState('')
+  const [resetRunning, setResetRunning] = useState(false)
+  const [resetProgress, setResetProgress] = useState(0)
+  const [resetMessage, setResetMessage] = useState('')
+  const [resetError, setResetError] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -110,6 +142,75 @@ export default function SettingsPage() {
       } catch {
         toast.error('Não foi possível carregar configurações agora.')
       }
+
+  async function startCompanyReset() {
+    const role = (me?.role || '').toString().trim().toLowerCase()
+    const isAdmin = role === 'admin' || role === 'owner'
+    if (!isAdmin) {
+      toast.error('Apenas admin pode fazer reset.')
+      return
+    }
+    const txt = (resetConfirmText || '').trim().toUpperCase()
+    if (txt !== 'RESET') {
+      toast.error('Digite RESET para confirmar.')
+      return
+    }
+
+    setResetError('')
+    setResetMessage('Iniciando...')
+    setResetProgress(1)
+    setResetRunning(true)
+
+    try {
+      await resetMyCompany('RESET')
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Não foi possível iniciar o reset.'
+      setResetRunning(false)
+      toast.error(msg)
+      return
+    }
+
+    // Polling do status até concluir
+    let alive = true
+    const tick = async () => {
+      if (!alive) return
+      try {
+        const st = await getMyCompanyResetStatus()
+        const p = Math.max(0, Math.min(100, Number(st?.progress || 0)))
+        setResetProgress((cur) => {
+          const target = Math.max(cur, p)
+          // suaviza subida 1 a 100
+          return target
+        })
+        setResetMessage(st?.message || '')
+        setResetError(st?.error || '')
+
+        const status = String(st?.status || '').toLowerCase()
+        if (status === 'done' && p >= 100) {
+          setResetProgress(100)
+          setResetMessage('Concluído.')
+          setTimeout(() => {
+            logout()
+            navigate('/login', { replace: true })
+          }, 600)
+          return
+        }
+        if (status === 'error') {
+          setResetRunning(false)
+          toast.error('Reset falhou. Veja o erro.')
+          return
+        }
+      } catch (e) {
+        // se o reset apagou dados e a sessão expirou, só sair
+      }
+      setTimeout(tick, 700)
+    }
+    tick()
+
+    return () => {
+      alive = false
+    }
+  }
      })()
      return () => {
        mounted = false
@@ -755,6 +856,47 @@ export default function SettingsPage() {
               className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {savingBranchVisibility ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openResetCompany}
+        title="Resetar banco de dados da empresa"
+        onClose={() => (resetRunning ? null : setOpenResetCompany(false))}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-300">
+            Esta ação vai apagar todos os dados da empresa. Para confirmar, digite <span className="text-slate-100 font-semibold">RESET</span>.
+          </div>
+          <input
+            value={resetConfirmText}
+            onChange={(e) => setResetConfirmText(e.target.value)}
+            className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-600"
+            placeholder="Digite RESET"
+            type="text"
+            disabled={resetRunning}
+          />
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setOpenResetCompany(false)}
+              disabled={resetRunning}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpenResetCompany(false)
+                startCompanyReset()
+              }}
+              disabled={resetRunning}
+              className="rounded-xl bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Confirmar reset
             </button>
           </div>
         </div>
