@@ -12,6 +12,7 @@ import StockAdjustmentPage from './pages/stock/StockAdjustmentPage.jsx'
 import SalesPage from './pages/sales/SalesPage.jsx'
 import PdvPage from './pages/pdv/PdvPage.jsx'
 import DebtsPage from './pages/debts/DebtsPage.jsx'
+import ReturnsPage from './pages/returns/ReturnsPage.jsx'
 import TablesPage from './pages/tables/TablesPage.jsx'
 import OrdersPage from './pages/orders/OrdersPage.jsx'
 import FinancePage from './pages/finance/FinancePage.jsx'
@@ -89,6 +90,7 @@ function App() {
           <Route path="/warehouse" element={<WarehousePage />} />
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/debts" element={<DebtsPage />} />
+          <Route path="/returns" element={<ReturnsPage />} />
           <Route path="/pdv" element={<PdvPage />} />
           <Route
             path="/tables"

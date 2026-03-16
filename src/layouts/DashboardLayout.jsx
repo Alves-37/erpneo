@@ -14,6 +14,7 @@ const nav = [
   { to: '/stock/history', label: 'Histórico de Stock' },
   { to: '/sales', label: 'Vendas' },
   { to: '/debts', label: 'Dívidas', hideForRestaurant: true },
+  { to: '/returns', label: 'Devoluções', hideForRestaurant: true },
   { to: '/pdv', label: 'PDV' },
   { to: '/orders', label: 'Pedidos', restaurantOnly: true },
   { to: '/tables', label: 'Mesas', restaurantOnly: true },
@@ -128,6 +129,7 @@ export default function DashboardLayout() {
                   item.to === '/dashboard' ||
                   item.to === '/sales' ||
                   item.to === '/debts' ||
+                  item.to === '/returns' ||
                   item.to === '/pdv' ||
                   item.to === '/orders' ||
                   item.to === '/tables' ||

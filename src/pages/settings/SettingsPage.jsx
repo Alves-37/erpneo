@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { listCompanies } from '../../api/companies.js'
 import { updateMyCompany, uploadMyCompanyLogo } from '../../api/companySettings.js'
-import { getMyBranch } from '../../api/branches.js'
+import { getMyBranch, updateMyBranchPublicMenu } from '../../api/branches.js'
 import { changePassword, updateMe } from '../../api/me.js'
 import { toast } from '../../services/toast.js'
 
@@ -62,6 +62,12 @@ export default function SettingsPage() {
   const [openCompany, setOpenCompany] = useState(false)
   const [openProfile, setOpenProfile] = useState(false)
   const [openSecurity, setOpenSecurity] = useState(false)
+  const [openPublicMenu, setOpenPublicMenu] = useState(false)
+
+  const [publicMenuEnabled, setPublicMenuEnabled] = useState(false)
+  const [publicMenuSubdomain, setPublicMenuSubdomain] = useState('')
+  const [publicMenuCustomDomain, setPublicMenuCustomDomain] = useState('')
+  const [savingPublicMenu, setSavingPublicMenu] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -74,6 +80,10 @@ export default function SettingsPage() {
 
         const b = await getMyBranch()
         setBranch(b)
+
+        setPublicMenuEnabled(Boolean(b?.public_menu_enabled))
+        setPublicMenuSubdomain(b?.public_menu_subdomain || '')
+        setPublicMenuCustomDomain(b?.public_menu_custom_domain || '')
 
         setCompanyName(c?.name || '')
         setCompanyNuit(c?.nuit || '')
@@ -91,11 +101,47 @@ export default function SettingsPage() {
       } catch {
         toast.error('Não foi possível carregar configurações agora.')
       }
-    })()
-    return () => {
-      mounted = false
+     })()
+     return () => {
+       mounted = false
+     }
+   }, [])
+
+  async function onSavePublicMenu() {
+    if (!branch?.id) {
+      toast.error('Filial não encontrada.')
+      return
     }
-  }, [])
+
+    setSavingPublicMenu(true)
+    try {
+      const updated = await updateMyBranchPublicMenu(branch.id, {
+        public_menu_enabled: Boolean(publicMenuEnabled),
+        public_menu_subdomain: publicMenuSubdomain,
+        public_menu_custom_domain: publicMenuCustomDomain,
+      })
+      setBranch(updated)
+      setPublicMenuEnabled(Boolean(updated?.public_menu_enabled))
+      setPublicMenuSubdomain(updated?.public_menu_subdomain || '')
+      setPublicMenuCustomDomain(updated?.public_menu_custom_domain || '')
+      toast.success('Configuração do menu público salva.')
+      setOpenPublicMenu(false)
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Não foi possível salvar agora.'
+      toast.error(msg)
+    } finally {
+      setSavingPublicMenu(false)
+    }
+  }
+
+  const role = (me?.role || '').toString().trim().toLowerCase()
+  const isAdmin = role === 'admin' || role === 'owner'
+  const isRestaurantBranch = (branch?.business_type || '').toString().trim().toLowerCase() === 'restaurant'
+  const publicMenuUrl = publicMenuCustomDomain
+    ? `https://${publicMenuCustomDomain}`
+    : publicMenuSubdomain
+      ? `https://${publicMenuSubdomain}.vuchada.com`
+      : ''
 
   async function onUploadLogo(file) {
     if (!file) return
@@ -227,6 +273,46 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+
+        {isRestaurantBranch ? (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <div className="text-sm font-semibold text-white">Menu público</div>
+            <div className="mt-2 text-sm text-slate-300">
+              <div className="text-slate-400 text-xs">
+                Use 1 opção:
+              </div>
+              <div className="mt-2 text-xs text-slate-400">
+                Subdomínio: <span className="text-slate-200">menu</span> vira <span className="text-slate-200">https://menu.vuchada.com</span>
+              </div>
+              <div className="mt-1 text-xs text-slate-400">
+                Domínio próprio: <span className="text-slate-200">cardapio.seurestaurante.com</span> (tem prioridade)
+              </div>
+              <div className="mt-2 text-xs text-slate-400">
+                Estado: <span className="text-slate-200">{branch?.public_menu_enabled ? 'Ativo' : 'Inativo'}</span>
+              </div>
+              {publicMenuUrl ? (
+                <div className="mt-1 text-xs text-slate-400 break-all">
+                  URL: <span className="text-slate-200">{publicMenuUrl}</span>
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4">
+              <button
+                onClick={() => {
+                  if (!isAdmin) {
+                    toast.error('Apenas admin pode configurar o menu público.')
+                    return
+                  }
+                  setOpenPublicMenu(true)
+                }}
+                className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white"
+                type="button"
+              >
+                Configurar menu
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <Modal open={openCompany} title="Configurar empresa" onClose={() => (saving ? null : setOpenCompany(false))}>
@@ -462,6 +548,68 @@ export default function SettingsPage() {
               className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {changingPassword ? 'Alterando...' : 'Alterar senha'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={openPublicMenu} title="Configurar menu público (restaurante)" onClose={() => (savingPublicMenu ? null : setOpenPublicMenu(false))}>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onSavePublicMenu()
+          }}
+        >
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={Boolean(publicMenuEnabled)}
+              onChange={(e) => setPublicMenuEnabled(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <div className="text-sm font-medium text-slate-200">Ativar menu público nesta filial</div>
+          </label>
+
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Subdomínio (opção 1)</div>
+            <input
+              value={publicMenuSubdomain}
+              onChange={(e) => setPublicMenuSubdomain(e.target.value)}
+              placeholder="menu"
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="text"
+            />
+            <div className="text-xs text-slate-400">Exemplo: menu -> https://menu.vuchada.com</div>
+          </label>
+
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Domínio próprio (opção 2)</div>
+            <input
+              value={publicMenuCustomDomain}
+              onChange={(e) => setPublicMenuCustomDomain(e.target.value)}
+              placeholder="cardapio.seurestaurante.com"
+              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              type="text"
+            />
+            <div className="text-xs text-slate-400">Se preencher, este domínio terá prioridade sobre o subdomínio.</div>
+          </label>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setOpenPublicMenu(false)}
+              disabled={savingPublicMenu}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Fechar
+            </button>
+            <button
+              type="submit"
+              disabled={savingPublicMenu}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {savingPublicMenu ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
         </form>
