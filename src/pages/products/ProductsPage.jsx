@@ -85,6 +85,7 @@ export default function ProductsPage() {
   const [minStock, setMinStock] = useState('')
   const [stockQty, setStockQty] = useState('')
   const [trackStock, setTrackStock] = useState(true)
+  const [isService, setIsService] = useState(false)
   const [isActive, setIsActive] = useState(true)
   const [images, setImages] = useState([])
   const [creating, setCreating] = useState(false)
@@ -262,6 +263,7 @@ export default function ProductsPage() {
     setMinStock('')
     setStockQty('')
     setTrackStock(true)
+    setIsService(false)
     setIsActive(true)
     setImages([])
     setCategoryMode('select')
@@ -284,6 +286,7 @@ export default function ProductsPage() {
     setMinStock(p?.min_stock != null ? String(p.min_stock) : '')
     setStockQty(p?.stock_qty != null ? String(p.stock_qty) : '')
     setTrackStock(Boolean(p?.track_stock))
+    setIsService(Boolean(p?.is_service))
     setIsActive(Boolean(p?.is_active))
 
     setSupplierId(p?.supplier_id ? String(p.supplier_id) : '')
@@ -331,13 +334,13 @@ export default function ProductsPage() {
       return
     }
 
-    const parsedMinStock = minStock === '' ? 0 : Number(String(minStock).replace(',', '.'))
+    const parsedMinStock = isService ? 0 : (minStock === '' ? 0 : Number(String(minStock).replace(',', '.')))
     if (!Number.isFinite(parsedMinStock) || parsedMinStock < 0) {
       toast.error('Estoque mínimo inválido.')
       return
     }
 
-    const parsedStockQty = stockQty === '' ? null : Number(String(stockQty).replace(',', '.'))
+    const parsedStockQty = isService ? null : (stockQty === '' ? null : Number(String(stockQty).replace(',', '.')))
     if (parsedStockQty !== null && (!Number.isFinite(parsedStockQty) || parsedStockQty < 0)) {
       toast.error('Estoque inválido.')
       return
@@ -351,16 +354,17 @@ export default function ProductsPage() {
       default_location_id: Number(defaultLocationId),
       unit: finalUnit,
       price: price ? Number(price) : 0,
-      cost: cost ? Number(cost) : 0,
+      cost: isService ? 0 : (cost ? Number(cost) : 0),
       tax_rate: parsedTax,
       min_stock: parsedMinStock,
-      track_stock: trackStock,
+      track_stock: isService ? false : trackStock,
+      is_service: isService,
       is_active: isActive,
       category_id: categoryMode === 'select' && categoryId ? Number(categoryId) : null,
       category_name: categoryMode === 'new' ? categoryName.trim() : null,
     }
 
-    if (parsedStockQty !== null) payload.stock_qty = parsedStockQty
+    if (!isService && parsedStockQty !== null) payload.stock_qty = parsedStockQty
 
     setCreating(true)
     try {
@@ -765,6 +769,25 @@ export default function ProductsPage() {
         }}
       >
         <form className="grid gap-4" onSubmit={onSubmit}>
+          <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              checked={isService}
+              onChange={(e) => {
+                const v = e.target.checked
+                setIsService(v)
+                if (v) {
+                  setTrackStock(false)
+                  setMinStock('')
+                  setStockQty('')
+                  setCost('')
+                }
+              }}
+              className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+            />
+            É serviço (sem stock e sem custo)
+          </label>
+
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="grid gap-2">
               <div className="text-sm font-medium text-slate-200">Nome</div>
@@ -938,6 +961,7 @@ export default function ProductsPage() {
                   className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
                   placeholder="0.00"
                   {...numericProps()}
+                  disabled={isService}
                 />
               </label>
             </div>
@@ -952,6 +976,7 @@ export default function ProductsPage() {
                 className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
                 placeholder="Ex: 10"
                 {...numericProps()}
+                disabled={isService}
               />
             </div>
 
@@ -963,6 +988,7 @@ export default function ProductsPage() {
                 className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
                 placeholder="Ex: 2"
                 {...numericProps()}
+                disabled={isService}
               />
             </div>
           </div>
@@ -974,6 +1000,7 @@ export default function ProductsPage() {
                 checked={trackStock}
                 onChange={(e) => setTrackStock(e.target.checked)}
                 className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+                disabled={isService}
               />
               Controla estoque
             </label>
