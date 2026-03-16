@@ -120,6 +120,11 @@ export default function SettingsPage() {
       } catch {
         toast.error('Não foi possível carregar configurações agora.')
       }
+     })()
+     return () => {
+       mounted = false
+     }
+   }, [])
 
   async function startCompanyReset() {
     const role = (me?.role || '').toString().trim().toLowerCase()
@@ -148,18 +153,11 @@ export default function SettingsPage() {
       return
     }
 
-    // Polling do status até concluir
-    let alive = true
     const tick = async () => {
-      if (!alive) return
       try {
         const st = await getMyCompanyResetStatus()
         const p = Math.max(0, Math.min(100, Number(st?.progress || 0)))
-        setResetProgress((cur) => {
-          const target = Math.max(cur, p)
-          // suaviza subida 1 a 100
-          return target
-        })
+        setResetProgress((cur) => Math.max(cur, p))
         setResetMessage(st?.message || '')
         setResetError(st?.error || '')
 
@@ -178,22 +176,13 @@ export default function SettingsPage() {
           toast.error('Reset falhou. Veja o erro.')
           return
         }
-      } catch (e) {
-        // se o reset apagou dados e a sessão expirou, só sair
+      } catch {
+        // ignore
       }
       setTimeout(tick, 700)
     }
     tick()
-
-    return () => {
-      alive = false
-    }
   }
-     })()
-     return () => {
-       mounted = false
-     }
-   }, [])
 
   async function openBranchVisibilityModal() {
     const role = (me?.role || '').toString().trim().toLowerCase()
