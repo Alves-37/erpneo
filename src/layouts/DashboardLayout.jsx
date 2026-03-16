@@ -36,24 +36,9 @@ const businessTypeLabel = {
   services: 'Serviços',
 }
 
-function _getVisibleBranchIds(companyId) {
-  try {
-    const key = companyId ? `visible_branch_ids:${companyId}` : 'visible_branch_ids'
-    const raw = localStorage.getItem(key)
-    if (!raw) return null
-    const arr = JSON.parse(raw)
-    if (!Array.isArray(arr)) return null
-    const ids = arr.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
-    return ids.length ? ids : []
-  } catch {
-    return null
-  }
-}
-
-function _filterBranchesByVisibility(companyId, branches) {
-  const ids = _getVisibleBranchIds(companyId)
-  if (ids === null) return branches
-  const set = new Set(ids.map(String))
+function _filterBranchesByVisibility(visibleBranchIds, branches) {
+  if (!Array.isArray(visibleBranchIds) || !visibleBranchIds.length) return branches
+  const set = new Set(visibleBranchIds.map((x) => String(Number(x))))
   return (branches || []).filter((b) => b?.id != null && set.has(String(b.id)))
 }
 
@@ -72,7 +57,9 @@ export default function DashboardLayout() {
   const bumpContext = useAuthStore((s) => s.bumpContext)
   const logout = useAuthStore((s) => s.logout)
 
-  const isCashier = (me?.role || '').toLowerCase() === 'cashier'
+  const role = (me?.role || '').toString().trim().toLowerCase()
+  const isCashier = role === 'cashier'
+  const canSwitchBranch = role === 'admin' || role === 'owner'
 
   const bt = (branch?.business_type || 'retail').toString().trim().toLowerCase()
   const isRestaurant = bt === 'restaurant'
@@ -82,14 +69,16 @@ export default function DashboardLayout() {
     let mounted = true
     async function load() {
       try {
-        const [b, list] = await Promise.all([getMyBranch(), listBranches()])
+        const [b, list, meRes] = await Promise.all([getMyBranch(), listBranches(), getMe()])
         if (mounted) setBranch(b, { persist: true })
+        if (mounted) setMe(meRes, { persist: true })
         if (mounted) {
           const rows = Array.isArray(list) ? list : []
-          setBranches(_filterBranchesByVisibility(b?.company_id, rows))
+          setBranches(_filterBranchesByVisibility(meRes?.visible_branch_ids, rows))
         }
       } catch {
         if (mounted) setBranch(null, { persist: true })
+        if (mounted) setMe(null, { persist: true })
         if (mounted) setBranches([])
       }
     }
@@ -101,22 +90,8 @@ export default function DashboardLayout() {
   }, [setBranch, contextVersion])
 
   useEffect(() => {
-    let mounted = true
-    if (!token) return
-
-    ;(async () => {
-      try {
-        const data = await getMe()
-        if (mounted) setMe(data, { persist: true })
-      } catch {
-        if (mounted) setMe(null, { persist: true })
-      }
-    })()
-
-    return () => {
-      mounted = false
-    }
-  }, [token, setMe])
+    // me já é carregado junto com as filiais no effect acima
+  }, [])
 
   return (
     <div className="h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -229,8 +204,9 @@ export default function DashboardLayout() {
                 <div className="text-xs font-semibold text-slate-400">Filial</div>
                 <select
                   value={branch?.id ? String(branch.id) : ''}
-                  disabled={switchingBranch || !branches?.length}
+                  disabled={!canSwitchBranch || switchingBranch || !branches?.length}
                   onChange={async (e) => {
+                    if (!canSwitchBranch) return
                     const nextId = e.target.value
                     if (!nextId) return
                     setSwitchingBranch(true)
@@ -264,8 +240,9 @@ export default function DashboardLayout() {
             <div className="pb-3 lg:hidden">
               <select
                 value={branch?.id ? String(branch.id) : ''}
-                disabled={switchingBranch || !branches?.length}
+                disabled={!canSwitchBranch || switchingBranch || !branches?.length}
                 onChange={async (e) => {
+                  if (!canSwitchBranch) return
                   const nextId = e.target.value
                   if (!nextId) return
                   setSwitchingBranch(true)

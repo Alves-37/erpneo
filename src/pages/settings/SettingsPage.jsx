@@ -89,20 +89,6 @@ export default function SettingsPage() {
         const b = await getMyBranch()
         setBranch(b)
 
-        try {
-          const key = b?.company_id ? `visible_branch_ids:${b.company_id}` : 'visible_branch_ids'
-          const raw = localStorage.getItem(key)
-          if (raw) {
-            const arr = JSON.parse(raw)
-            if (Array.isArray(arr)) {
-              const ids = arr.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)
-              setVisibleBranchIds(ids)
-            }
-          }
-        } catch {
-          // ignore
-        }
-
         setPublicMenuEnabled(Boolean(b?.public_menu_enabled))
         setPublicMenuSubdomain(b?.public_menu_subdomain || '')
         setPublicMenuCustomDomain(b?.public_menu_custom_domain || '')
@@ -117,6 +103,7 @@ export default function SettingsPage() {
 
         const meRes = await (await import('../../api/auth.js')).getMe()
         setMe(meRes)
+        setVisibleBranchIds(Array.isArray(meRes?.visible_branch_ids) ? meRes.visible_branch_ids : [])
         setProfileName(meRes?.name || '')
         setProfileEmail(meRes?.email || '')
         setProfileUsername(meRes?.username || '')
@@ -130,16 +117,21 @@ export default function SettingsPage() {
    }, [])
 
   async function openBranchVisibilityModal() {
+    const role = (me?.role || '').toString().trim().toLowerCase()
+    const isAdmin = role === 'admin' || role === 'owner'
+    if (!isAdmin) {
+      toast.error('Apenas admin pode configurar filiais visíveis.')
+      return
+    }
     setOpenBranchVisibility(true)
     try {
       const rows = await listBranches()
       const normalized = Array.isArray(rows) ? rows : []
       setBranchesList(normalized)
 
-      // Se ainda não tiver seleção salva, começar com "todas marcadas" (default = mostrar tudo)
-      if (!visibleBranchIds?.length) {
-        // deixar vazio significa "sem filtro" quando salvamos (removendo a chave)
-        // mas no UI marcamos todas
+      // Se não houver filtro salvo no backend, marcar todas no UI.
+      const backendIds = Array.isArray(me?.visible_branch_ids) ? me.visible_branch_ids : []
+      if (!backendIds.length) {
         setVisibleBranchIds(normalized.map((x) => Number(x.id)).filter((n) => Number.isFinite(n) && n > 0))
       }
     } catch {
@@ -149,13 +141,8 @@ export default function SettingsPage() {
   }
 
   async function onSaveBranchVisibility() {
-    if (!branch?.company_id) {
-      toast.error('Empresa não encontrada.')
-      return
-    }
     setSavingBranchVisibility(true)
     try {
-      const key = `visible_branch_ids:${branch.company_id}`
       const allIds = (branchesList || []).map((x) => Number(x.id)).filter((n) => Number.isFinite(n) && n > 0)
 
       // Garantir que a filial atual sempre esteja visível (para não "sumir" do seletor)
@@ -163,7 +150,7 @@ export default function SettingsPage() {
       const next = Array.from(new Set((visibleBranchIds || []).map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)))
       if (currentId && !next.includes(currentId)) next.push(currentId)
 
-      // Se marcou todas, remover o filtro (default = mostrar tudo)
+      // Se marcou todas, salvar NULL (default = mostrar tudo)
       const allSet = new Set(allIds.map(String))
       const nextSet = new Set(next.map(String))
       let isAll = true
@@ -174,11 +161,10 @@ export default function SettingsPage() {
         }
       }
 
-      if (isAll) {
-        localStorage.removeItem(key)
-      } else {
-        localStorage.setItem(key, JSON.stringify(next))
-      }
+      const payload = { visible_branch_ids: isAll ? null : next }
+      const updatedMe = await updateMe(payload)
+      setMe(updatedMe)
+      setVisibleBranchIds(Array.isArray(updatedMe?.visible_branch_ids) ? updatedMe.visible_branch_ids : [])
 
       toast.success('Filiais do cabeçalho atualizadas.')
       setOpenBranchVisibility(false)
