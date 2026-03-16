@@ -11,47 +11,25 @@ import { useAuthStore } from '../../store/authStore.js'
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
   return (
-    <div className="p-4">
-      {resetRunning ? (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/70" />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-2xl">
-              <div className="text-sm font-semibold text-white">Resetando banco de dados...</div>
-              <div className="mt-2 text-xs text-slate-400">{resetMessage || 'Aguarde...'}</div>
-              <div className="mt-4 h-3 w-full rounded-full bg-slate-800 overflow-hidden">
-                <div
-                  className="h-full bg-brand-600"
-                  style={{ width: `${Math.max(1, Math.min(100, Number(resetProgress || 0)))}%` }}
-                />
-              </div>
-              <div className="mt-2 text-xs text-slate-300">{Math.max(1, Math.min(100, Number(resetProgress || 0)))}%</div>
-              {resetError ? <div className="mt-3 text-xs text-rose-300 break-words">{resetError}</div> : null}
-              <div className="mt-4 text-xs text-slate-400">Durante o reset, o sistema fica bloqueado.</div>
-            </div>
+    <div className="fixed inset-0 z-40">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+            <div className="text-sm font-semibold text-white">{title}</div>
+            <button
+              onClick={onClose}
+              className="h-8 w-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-300"
+              type="button"
+              aria-label="Fechar"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                <path d="M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
-        </div>
-      ) : null}
-      <div className="fixed inset-0 z-40">
-        <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-        <div className="absolute inset-0 flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-              <div className="text-sm font-semibold text-white">{title}</div>
-              <button
-                onClick={onClose}
-                className="h-8 w-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-300"
-                type="button"
-                aria-label="Fechar"
-              >
-                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-                  <path d="M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-5">{children}</div>
-          </div>
+          <div className="p-5">{children}</div>
         </div>
       </div>
     </div>
@@ -391,6 +369,26 @@ export default function SettingsPage() {
 
   return (
     <div>
+      {resetRunning ? (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/70" />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-2xl">
+              <div className="text-sm font-semibold text-white">Resetando banco de dados...</div>
+              <div className="mt-2 text-xs text-slate-400">{resetMessage || 'Aguarde...'}</div>
+              <div className="mt-4 h-3 w-full rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-brand-600"
+                  style={{ width: `${Math.max(1, Math.min(100, Number(resetProgress || 0)))}%` }}
+                />
+              </div>
+              <div className="mt-2 text-xs text-slate-300">{Math.max(1, Math.min(100, Number(resetProgress || 0)))}%</div>
+              {resetError ? <div className="mt-3 text-xs text-rose-300 break-words">{resetError}</div> : null}
+              <div className="mt-4 text-xs text-slate-400">Durante o reset, o sistema fica bloqueado.</div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="text-xl font-semibold">Configurações</div>
       <div className="mt-1 text-sm text-slate-300">Empresa: {company?.name || '—'}</div>
       <div className="mt-1 text-xs text-slate-500">Para trocar de filial (Bar/Restaurante/Retalho), use o seletor de Filial no topo.</div>
