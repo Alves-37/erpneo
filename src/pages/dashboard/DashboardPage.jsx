@@ -20,12 +20,37 @@ export default function DashboardPage() {
   const [series, setSeries] = useState([])
   const [expiryAlerts, setExpiryAlerts] = useState(null)
 
+  function _canFetchExpiryAlerts() {
+    try {
+      const raw = window.localStorage.getItem('dashboard_expiry_alerts_disabled_until')
+      const until = raw ? Number(raw) : 0
+      if (Number.isFinite(until) && until > Date.now()) return false
+      return true
+    } catch {
+      return true
+    }
+  }
+
+  function _disableExpiryAlertsTemporarily() {
+    try {
+      const until = Date.now() + 6 * 60 * 60 * 1000
+      window.localStorage.setItem('dashboard_expiry_alerts_disabled_until', String(until))
+    } catch {
+      // ignore
+    }
+  }
+
   async function refresh() {
     setLoading(true)
     try {
       const estId = isAdmin ? (establishment?.id || undefined) : undefined
-      const expPromise = isPharmacy
-        ? getDashboardExpiryAlerts({ days: 30, limit: 8, establishment_id: estId }).catch(() => null)
+      const expPromise = isPharmacy && _canFetchExpiryAlerts()
+        ? getDashboardExpiryAlerts({ days: 30, limit: 8, establishment_id: estId }).catch((err) => {
+            if (err?.response?.status === 404) {
+              _disableExpiryAlertsTemporarily()
+            }
+            return null
+          })
         : Promise.resolve(null)
 
       const [s, ss, exp] = await Promise.all([
