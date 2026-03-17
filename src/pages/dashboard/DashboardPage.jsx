@@ -33,8 +33,16 @@ export default function DashboardPage() {
 
   function _disableExpiryAlertsTemporarily() {
     try {
-      const until = Date.now() + 6 * 60 * 60 * 1000
+      const until = Date.now() + 5 * 60 * 1000
       window.localStorage.setItem('dashboard_expiry_alerts_disabled_until', String(until))
+    } catch {
+      // ignore
+    }
+  }
+
+  function _clearExpiryAlertsDisable() {
+    try {
+      window.localStorage.removeItem('dashboard_expiry_alerts_disabled_until')
     } catch {
       // ignore
     }
@@ -61,6 +69,9 @@ export default function DashboardPage() {
       setSummary(s)
       setSeries(ss || [])
       setExpiryAlerts(exp)
+      if (exp) {
+        _clearExpiryAlertsDisable()
+      }
     } catch {
       setSummary(null)
       setSeries([])
