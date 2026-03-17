@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getDashboardSalesSeries, getDashboardSummary } from '../../api/dashboard.js'
+import { getDashboardExpiryAlerts, getDashboardSalesSeries, getDashboardSummary } from '../../api/dashboard.js'
 import { useAuthStore } from '../../store/authStore.js'
 
 export default function DashboardPage() {
   const me = useAuthStore((s) => s.me)
   const isCashier = (me?.role || '').toLowerCase() === 'cashier'
   const establishment = useAuthStore((s) => s.establishment)
+  const branch = useAuthStore((s) => s.branch)
   const contextVersion = useAuthStore((s) => s.contextVersion)
+
+  const businessType = (branch?.business_type || 'retail').toString().trim().toLowerCase()
+  const isPharmacy = businessType === 'pharmacy'
 
   const role = (me?.role || '').toString().trim().toLowerCase()
   const isAdmin = role === 'admin' || role === 'owner'
@@ -14,20 +18,28 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState(null)
   const [series, setSeries] = useState([])
+  const [expiryAlerts, setExpiryAlerts] = useState(null)
 
   async function refresh() {
     setLoading(true)
     try {
       const estId = isAdmin ? (establishment?.id || undefined) : undefined
-      const [s, ss] = await Promise.all([
+      const expPromise = isPharmacy
+        ? getDashboardExpiryAlerts({ days: 30, limit: 8, establishment_id: estId }).catch(() => null)
+        : Promise.resolve(null)
+
+      const [s, ss, exp] = await Promise.all([
         getDashboardSummary({ establishment_id: estId }),
         getDashboardSalesSeries({ days: 30, establishment_id: estId }),
+        expPromise,
       ])
       setSummary(s)
       setSeries(ss || [])
+      setExpiryAlerts(exp)
     } catch {
       setSummary(null)
       setSeries([])
+      setExpiryAlerts(null)
     } finally {
       setLoading(false)
     }
@@ -36,7 +48,7 @@ export default function DashboardPage() {
   useEffect(() => {
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextVersion, establishment?.id, me?.role])
+  }, [contextVersion, establishment?.id, me?.role, branch?.business_type])
 
   const fmtMoney = useMemo(() => {
     try {
@@ -134,11 +146,61 @@ export default function DashboardPage() {
               <div className="mt-2 text-xs text-slate-400">MZN</div>
             </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
-              <div className="text-xs font-semibold text-slate-400">Lucro (mês)</div>
-              <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.profit_month || 0))}</div>
-              <div className="mt-2 text-xs text-slate-400">MZN</div>
-            </div>
+            {isPharmacy ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold text-slate-400">Alertas de validade</div>
+                    <div className="mt-1 text-xs text-slate-500">Próximos {expiryAlerts?.days_window ?? 30} dias</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex items-center rounded-xl border border-rose-900/60 bg-rose-950/30 px-2.5 py-1 text-[11px] font-semibold text-rose-200">
+                      {loading ? '-' : expiryAlerts?.expired_count ?? 0}
+                    </div>
+                    <div className="inline-flex items-center rounded-xl border border-amber-900/60 bg-amber-950/25 px-2.5 py-1 text-[11px] font-semibold text-amber-200">
+                      {loading ? '-' : expiryAlerts?.expiring_soon_count ?? 0}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950">
+                  {(expiryAlerts?.items || []).length ? (
+                    <div className="divide-y divide-slate-800">
+                      {(expiryAlerts?.items || []).slice(0, 3).map((it) => {
+                        const daysToExpire = Number(it?.days_to_expire || 0)
+                        const isExpired = daysToExpire < 0
+                        return (
+                          <div key={it.product_id} className="flex items-center justify-between gap-3 px-3 py-2">
+                            <div className="min-w-0 text-xs font-semibold text-slate-100 truncate" title={it.name || ''}>
+                              {it.name}
+                            </div>
+                            <div
+                              className={`shrink-0 inline-flex items-center rounded-xl border px-2.5 py-1 text-[11px] font-semibold ${
+                                isExpired
+                                  ? 'border-rose-900/60 bg-rose-950/30 text-rose-200'
+                                  : daysToExpire <= 7
+                                    ? 'border-amber-900/60 bg-amber-950/25 text-amber-200'
+                                    : 'border-slate-800 bg-slate-900 text-slate-200'
+                              }`}
+                            >
+                              {isExpired ? `${Math.abs(daysToExpire)}d` : `${daysToExpire}d`}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="px-3 py-3 text-sm text-slate-300">Sem alertas.</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
+                <div className="text-xs font-semibold text-slate-400">Lucro (mês)</div>
+                <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.profit_month || 0))}</div>
+                <div className="mt-2 text-xs text-slate-400">MZN</div>
+              </div>
+            )}
           </>
         )}
 
