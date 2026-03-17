@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { listCompanies } from '../../api/companies.js'
 import { getMyBranch } from '../../api/branches.js'
@@ -56,10 +56,14 @@ export default function PdvPage() {
   const [branch, setBranch] = useState(null)
   const businessType = branch?.business_type || 'retail'
   const isRestaurant = businessType === 'restaurant'
+  const isPharmacy = businessType === 'pharmacy'
 
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState([])
   const [q, setQ] = useState('')
+
+  const scanBufferRef = useRef('')
+  const scanLastAtRef = useRef(0)
 
   const [categories, setCategories] = useState([])
   const [activeCategoryId, setActiveCategoryId] = useState('')
@@ -508,6 +512,60 @@ export default function PdvPage() {
       return next
     })
   }
+
+  function findProductByCode(codeRaw) {
+    const code = String(codeRaw || '').trim()
+    if (!code) return null
+    const lower = code.toLowerCase()
+    for (const p of items || []) {
+      const bc = String(p?.barcode || '').trim()
+      if (bc && bc === code) return p
+      const sku = String(p?.sku || '').trim()
+      if (sku && sku.toLowerCase() === lower) return p
+    }
+    return null
+  }
+
+  useEffect(() => {
+    if (!isPharmacy) return
+
+    const onKeyDown = (e) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return
+      if (e.key === 'Shift' || e.key === 'CapsLock' || e.key === 'Tab') return
+
+      const tag = String(e.target?.tagName || '').toLowerCase()
+      const isTypingField = tag === 'input' || tag === 'textarea' || e.target?.isContentEditable
+      if (isTypingField) return
+
+      const now = Date.now()
+      const gap = now - (scanLastAtRef.current || 0)
+
+      if (e.key === 'Enter') {
+        const code = String(scanBufferRef.current || '').trim()
+        if (code) {
+          const p = findProductByCode(code)
+          if (p) {
+            addToCart(p)
+          } else {
+            toast.error('Produto não encontrado para o código lido.')
+          }
+        }
+        scanBufferRef.current = ''
+        scanLastAtRef.current = now
+        return
+      }
+
+      if (e.key.length === 1) {
+        const next = gap > 120 ? e.key : `${scanBufferRef.current || ''}${e.key}`
+        scanBufferRef.current = next
+        scanLastAtRef.current = now
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPharmacy, items])
 
   function setQty(productId, qty) {
     setCart((prev) => {

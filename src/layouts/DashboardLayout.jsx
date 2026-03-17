@@ -25,7 +25,6 @@ const nav = [
   { to: '/establishments', label: 'Pontos', adminOnly: true },
   { to: '/users', label: 'Usuários' },
   { to: '/settings', label: 'Configurações' },
-  { to: '/logout', label: 'Logout', isLogout: true },
 ]
 
 const businessTypeLabel = {
@@ -160,38 +159,24 @@ export default function DashboardLayout() {
                   item.to === '/returns' ||
                   item.to === '/pdv' ||
                   item.to === '/orders' ||
-                  item.to === '/tables' ||
-                  item.to === '/logout'
+                  item.to === '/tables'
                 )
               })
               .map((item) => (
-                item.isLogout ? (
-                  <button
-                    key={item.to}
-                    onClick={() => {
-                      setSidebarOpen(false)
-                      setLogoutOpen(true)
-                    }}
-                    className="px-4 py-3 rounded-xl text-base font-semibold transition-all duration-150 bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-sm hover:from-rose-500 hover:to-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/60"
-                  >
-                    {item.label}
-                  </button>
-                ) : (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setSidebarOpen(false)}
-                    className={({ isActive }) =>
-                      `px-4 py-3 rounded-xl text-base font-semibold transition-all duration-150 ${
-                        isActive
-                          ? 'bg-brand-600 text-white shadow-sm'
-                          : 'text-slate-200 bg-slate-900 hover:bg-slate-800 hover:text-white'
-                      }`
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                )
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setSidebarOpen(false)}
+                  className={({ isActive }) =>
+                    `px-4 py-3 rounded-xl text-base font-semibold transition-all duration-150 ${
+                      isActive
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-slate-200 bg-slate-900 hover:bg-slate-800 hover:text-white'
+                    }`
+                  }
+                >
+                  {item.label}
+                </NavLink>
               ))}
           </nav>
 
@@ -309,6 +294,14 @@ export default function DashboardLayout() {
                     </select>
                   </>
                 ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => setLogoutOpen(true)}
+                  className="ml-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-sm hover:from-rose-500 hover:to-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/60"
+                >
+                  Logout
+                </button>
               </div>
             </div>
 

@@ -76,6 +76,7 @@ export default function ProductsPage() {
   const [openCreate, setOpenCreate] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [restaurantActionsProduct, setRestaurantActionsProduct] = useState(null)
+  const [detailsProduct, setDetailsProduct] = useState(null)
 
   const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false)
   const [deletingProduct, setDeletingProduct] = useState(null)
@@ -95,6 +96,8 @@ export default function ProductsPage() {
   const [trackStock, setTrackStock] = useState(true)
   const [isService, setIsService] = useState(false)
   const [isActive, setIsActive] = useState(true)
+  const [descricao, setDescricao] = useState('')
+  const [validade, setValidade] = useState('')
   const [images, setImages] = useState([])
   const [creating, setCreating] = useState(false)
 
@@ -315,6 +318,8 @@ export default function ProductsPage() {
     setTrackStock(true)
     setIsService(false)
     setIsActive(true)
+    setDescricao('')
+    setValidade('')
     setImages([])
     setCategoryMode('select')
     setCategoryId('')
@@ -339,6 +344,8 @@ export default function ProductsPage() {
     setTrackStock(Boolean(p?.track_stock))
     setIsService(Boolean(p?.is_service))
     setIsActive(Boolean(p?.is_active))
+    setDescricao(p?.attributes?.descricao != null ? String(p.attributes.descricao) : '')
+    setValidade(p?.attributes?.validade != null ? String(p.attributes.validade) : '')
 
     setSupplierId(p?.supplier_id ? String(p.supplier_id) : '')
     setDefaultLocationId(p?.default_location_id ? String(p.default_location_id) : '')
@@ -419,6 +426,12 @@ export default function ProductsPage() {
       is_active: isActive,
       category_id: categoryMode === 'select' && categoryId ? Number(categoryId) : null,
       category_name: categoryMode === 'new' ? categoryName.trim() : null,
+    }
+
+    payload.attributes = {
+      ...(payload.attributes || {}),
+      descricao: descricao.trim() || null,
+      ...(isPharmacy ? { validade: validade || null } : {}),
     }
 
     if (isAdmin && establishmentId) payload.establishment_id = Number(establishmentId)
@@ -656,6 +669,17 @@ export default function ProductsPage() {
                       Código: <span className="text-slate-200">{p.barcode || '-'}</span>
                     </div>
                     <div className="mt-1 text-xs text-slate-400">
+                      Descrição: <span className="text-slate-200">{p?.attributes?.descricao || '-'}</span>
+                    </div>
+                    {isPharmacy ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Validade: <span className="text-slate-200">{p?.attributes?.validade || '-'}</span>
+                      </div>
+                    ) : null}
+                    {isPharmacy ? (
+                      <></>
+                    ) : null}
+                    <div className="mt-1 text-xs text-slate-400">
                       Unidade: <span className="text-slate-200">{p.unit || 'un'}</span>
                     </div>
                     <div className="mt-1 text-xs text-slate-400">
@@ -707,74 +731,63 @@ export default function ProductsPage() {
           )}
         </div>
 
-        <div className="mt-4 hidden md:block overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-          <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
+        <div className="mt-4 hidden md:block overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900">
+          <div className="min-w-[760px] grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
             <>
-              <div className="col-span-3">Produto</div>
-              <div className="col-span-2">Ponto</div>
-              <div className="col-span-1">SKU</div>
-              <div className="col-span-2">Código</div>
-              <div className="col-span-1">Unidade</div>
-              <div className="col-span-1">IVA</div>
-              <div className="col-span-1">Preço</div>
-              <div className="col-span-1 text-right">Ações</div>
+              <div className="col-span-5">Produto</div>
+              <div className="col-span-4">Ponto</div>
+              <div className="col-span-3 text-right">Ações</div>
             </>
           </div>
 
           {loading ? (
             <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
           ) : items.length ? (
-            <div className="divide-y divide-slate-800">
+            <div className="min-w-[760px] divide-y divide-slate-800">
               {items.map((p) => (
                 <div key={p.id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm items-center">
-                  <>
-                    <div className="col-span-3 font-semibold text-slate-100 truncate" title={p.name || ''}>
-                      {p.name}
-                    </div>
-                    <div className="col-span-2 text-slate-300 truncate" title={establishmentsById.get(Number(p.establishment_id || 0))?.name || ''}>
-                      {establishmentsById.get(Number(p.establishment_id || 0))?.name || '-'}
-                    </div>
-                    <div className="col-span-1 text-slate-300 truncate" title={p.sku || ''}>
-                      {p.sku || '-'}
-                    </div>
-                    <div className="col-span-2 text-slate-300 truncate" title={p.barcode || ''}>
-                      {p.barcode || '-'}
-                    </div>
-                    <div className="col-span-1 text-slate-300">{p.unit || 'un'}</div>
-                    <div className="col-span-1 text-slate-300">{Number(p.tax_rate || 0).toFixed(2)}%</div>
-                    <div className="col-span-1 text-slate-300">{Number(p.price || 0).toFixed(2)}</div>
-                    <div className="col-span-1 flex justify-end gap-2">
-                      <button
-                        type="button"
-                        className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
-                        onClick={() => {
-                          resetForm()
-                          loadCategories(businessType)
-                          setEditingId(p.id)
-                          fillFormFromProduct(p)
-                          setOpenCreate(true)
-                        }}
-                      >
-                        Editar
-                      </button>
-
-                      <button
-                        type="button"
-                        className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
-                        onClick={() => onToggleActive(p)}
-                      >
-                        {p.is_active ? 'Desativar' : 'Ativar'}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-1 text-xs text-rose-200"
-                        onClick={() => onDelete(p)}
-                      >
-                        Apagar
-                      </button>
-                    </div>
-                  </>
+                  <div className="col-span-5 font-semibold text-slate-100 truncate" title={p.name || ''}>
+                    {p.name}
+                  </div>
+                  <div className="col-span-4 text-slate-300 truncate" title={establishmentsById.get(Number(p.establishment_id || 0))?.name || ''}>
+                    {establishmentsById.get(Number(p.establishment_id || 0))?.name || '-'}
+                  </div>
+                  <div className="col-span-3 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
+                      onClick={() => setDetailsProduct(p)}
+                    >
+                      Detalhes
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
+                      onClick={() => {
+                        resetForm()
+                        loadCategories(businessType)
+                        setEditingId(p.id)
+                        fillFormFromProduct(p)
+                        setOpenCreate(true)
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
+                      onClick={() => onToggleActive(p)}
+                    >
+                      {p.is_active ? 'Desativar' : 'Ativar'}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-1 text-xs text-rose-200"
+                      onClick={() => onDelete(p)}
+                    >
+                      Apagar
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -840,6 +853,66 @@ export default function ProductsPage() {
         </div>
       </Modal>
 
+      <Modal open={Boolean(detailsProduct)} title={detailsProduct?.name || 'Detalhes'} onClose={() => setDetailsProduct(null)}>
+        <div className="grid gap-4 text-sm">
+          <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-slate-400">Ponto</div>
+              <div className="col-span-2 text-slate-100">{establishmentsById.get(Number(detailsProduct?.establishment_id || 0))?.name || '-'}</div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-slate-400">SKU</div>
+              <div className="col-span-2 text-slate-100">{detailsProduct?.sku || '-'}</div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-slate-400">Código</div>
+              <div className="col-span-2">
+                <span className="inline-flex items-center rounded-xl border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-100">
+                  {detailsProduct?.barcode || '-'}
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-slate-400">Descrição</div>
+              <div className="col-span-2 text-slate-100">{detailsProduct?.attributes?.descricao || '-'}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            {isPharmacy ? (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-slate-400">Validade</div>
+                <div className="col-span-2">
+                  <span className="inline-flex items-center rounded-xl border border-amber-900/50 bg-amber-950/25 px-3 py-1 text-xs font-semibold text-amber-200">
+                    {detailsProduct?.attributes?.validade || '-'}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-slate-400">Unidade</div>
+              <div className="col-span-2 text-slate-100">{detailsProduct?.unit || 'un'}</div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-slate-400">IVA</div>
+              <div className="col-span-2">
+                <span className="inline-flex items-center rounded-xl border border-emerald-900/50 bg-emerald-950/25 px-3 py-1 text-xs font-semibold text-emerald-200">
+                  {Number(detailsProduct?.tax_rate || 0).toFixed(2)}%
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="text-slate-400">Preço</div>
+              <div className="col-span-2">
+                <span className="inline-flex items-center rounded-xl border border-brand-600/30 bg-brand-600/10 px-3 py-1 text-xs font-semibold text-brand-200">
+                  {Number(detailsProduct?.price || 0).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
       <Modal
         open={openCreate}
         title={editingId ? 'Editar produto' : 'Novo produto'}
@@ -884,7 +957,7 @@ export default function ProductsPage() {
               />
             </label>
 
-            {isAdmin ? (
+            {isAdmin && !isPharmacy ? (
               <label className="grid gap-2">
                 <div className="text-sm font-medium text-slate-200">Ponto</div>
                 <select
@@ -1031,6 +1104,29 @@ export default function ProductsPage() {
                 type="text"
               />
             </div>
+
+            <div className="grid gap-2">
+              <div className="text-xs font-semibold text-slate-400">Descrição do produto</div>
+              <input
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                placeholder="Opcional"
+                type="text"
+              />
+            </div>
+
+            {isPharmacy ? (
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold text-slate-400">Data de validade</div>
+                <input
+                  value={validade}
+                  onChange={(e) => setValidade(e.target.value)}
+                  className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                  type="date"
+                />
+              </div>
+            ) : null}
 
             <div className="grid gap-2">
               <div className="text-xs font-semibold text-slate-400">IVA (%)</div>
