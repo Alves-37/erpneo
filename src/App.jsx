@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import LoginPage from './pages/login/LoginPage.jsx'
 import DashboardPage from './pages/dashboard/DashboardPage.jsx'
 import ProductsPage from './pages/products/ProductsPage.jsx'
+import CategoriesPage from './pages/categories/CategoriesPage.jsx'
 import StockPage from './pages/stock/StockPage.jsx'
 import WarehousePage from './pages/stock/WarehousePage.jsx'
 import StockHistoryPage from './pages/stock/StockHistoryPage.jsx'
@@ -19,6 +20,7 @@ import FinancePage from './pages/finance/FinancePage.jsx'
 import ReportsPage from './pages/reports/ReportsPage.jsx'
 import SettingsPage from './pages/settings/SettingsPage.jsx'
 import UsersPage from './pages/users/UsersPage.jsx'
+import EstablishmentsPage from './pages/establishments/EstablishmentsPage.jsx'
 import AuthLayout from './layouts/AuthLayout.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import { useAuthStore } from './store/authStore.js'
@@ -83,6 +85,7 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/stock" element={<StockPage />} />
           <Route path="/stock/history" element={<StockHistoryPage />} />
           <Route path="/stock/transfer" element={<StockTransferPage />} />
@@ -112,6 +115,7 @@ function App() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/establishments" element={<EstablishmentsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

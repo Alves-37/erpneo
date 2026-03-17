@@ -1,6 +1,6 @@
 import { apiClient } from '../services/apiClient.js'
 
-export async function listProducts({ q, limit = 50, offset = 0, low_stock = false, is_active, in_stock } = {}) {
+export async function listProducts({ q, limit = 50, offset = 0, low_stock = false, is_active, in_stock, establishment_id, category_id } = {}) {
   const res = await apiClient.get('/products', {
     params: {
       q: q || undefined,
@@ -9,6 +9,8 @@ export async function listProducts({ q, limit = 50, offset = 0, low_stock = fals
       low_stock: low_stock ? true : undefined,
       is_active: typeof is_active === 'boolean' ? is_active : undefined,
       in_stock: in_stock ? true : undefined,
+      establishment_id: establishment_id != null ? Number(establishment_id) : undefined,
+      category_id: category_id != null ? Number(category_id) : undefined,
     },
   })
   return res.data

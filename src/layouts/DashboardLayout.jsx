@@ -3,11 +3,13 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { getMe } from '../api/auth.js'
 import { getMyBranch, listBranches, switchMyBranch } from '../api/branches.js'
+import { listEstablishments, switchMyEstablishment } from '../api/establishments.js'
 import { useAuthStore } from '../store/authStore.js'
 
 const nav = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/products', label: 'Produtos' },
+  { to: '/categories', label: 'Categorias', pharmacyOnly: true },
   { to: '/warehouse', label: 'Armazém' },
   { to: '/stock/transfer', label: 'Transferência de Stock' },
   { to: '/stock/adjust', label: 'Ajuste de Stock' },
@@ -20,6 +22,7 @@ const nav = [
   { to: '/tables', label: 'Mesas', restaurantOnly: true },
   { to: '/finance', label: 'Finanças' },
   { to: '/reports', label: 'Relatórios' },
+  { to: '/establishments', label: 'Pontos', adminOnly: true },
   { to: '/users', label: 'Usuários' },
   { to: '/settings', label: 'Configurações' },
   { to: '/logout', label: 'Logout', isLogout: true },
@@ -34,6 +37,8 @@ const businessTypeLabel = {
   bar: 'Bar',
   butcher: 'Açougue',
   services: 'Serviços',
+  pharmacy: 'Farmácia',
+  reprography: 'Reprografia',
 }
 
 function _filterBranchesByVisibility(visibleBranchIds, branches) {
@@ -47,10 +52,14 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [branches, setBranches] = useState([])
   const [switchingBranch, setSwitchingBranch] = useState(false)
+  const [establishments, setEstablishments] = useState([])
+  const [switchingEstablishment, setSwitchingEstablishment] = useState(false)
   const navigate = useNavigate()
   const token = useAuthStore((s) => s.token)
   const me = useAuthStore((s) => s.me)
   const setMe = useAuthStore((s) => s.setMe)
+  const establishment = useAuthStore((s) => s.establishment)
+  const setEstablishment = useAuthStore((s) => s.setEstablishment)
   const branch = useAuthStore((s) => s.branch)
   const setBranch = useAuthStore((s) => s.setBranch)
   const contextVersion = useAuthStore((s) => s.contextVersion)
@@ -60,10 +69,12 @@ export default function DashboardLayout() {
   const role = (me?.role || '').toString().trim().toLowerCase()
   const isCashier = role === 'cashier'
   const canSwitchBranch = role === 'admin' || role === 'owner'
+  const canSwitchEstablishment = canSwitchBranch
 
   const bt = (branch?.business_type || 'retail').toString().trim().toLowerCase()
   const isRestaurant = bt === 'restaurant'
   const isBar = bt === 'bar'
+  const isPharmacy = bt === 'pharmacy'
 
   useEffect(() => {
     let mounted = true
@@ -76,10 +87,26 @@ export default function DashboardLayout() {
           const rows = Array.isArray(list) ? list : []
           setBranches(_filterBranchesByVisibility(meRes?.visible_branch_ids, rows))
         }
+
+        if (mounted && b?.id) {
+          try {
+            const points = await listEstablishments({ branch_id: b.id })
+            setEstablishments(Array.isArray(points) ? points : [])
+
+            const currentId = Number(meRes?.establishment_id || 0) || null
+            const current = currentId ? (points || []).find((p) => Number(p.id) === currentId) : null
+            setEstablishment(current || null, { persist: true })
+          } catch {
+            setEstablishments([])
+            setEstablishment(null, { persist: true })
+          }
+        }
       } catch {
         if (mounted) setBranch(null, { persist: true })
         if (mounted) setMe(null, { persist: true })
+        if (mounted) setEstablishment(null, { persist: true })
         if (mounted) setBranches([])
+        if (mounted) setEstablishments([])
       }
     }
 
@@ -120,8 +147,10 @@ export default function DashboardLayout() {
           <nav className="mt-5 flex flex-col gap-2">
             {nav
               .filter((item) => !item.restaurantOnly || isRestaurant)
+              .filter((item) => !item.pharmacyOnly || isPharmacy)
               .filter((item) => !(isRestaurant && item.hideForRestaurant))
               .filter((item) => !(isBar && item.to.startsWith('/stock')))
+              .filter((item) => !item.adminOnly || canSwitchBranch)
               .filter((item) => {
                 if (!isCashier) return true
                 return (
@@ -216,6 +245,16 @@ export default function DashboardLayout() {
                       try {
                         const data = await getMe()
                         setMe(data, { persist: true })
+                        try {
+                          const points = await listEstablishments({ branch_id: b.id })
+                          setEstablishments(Array.isArray(points) ? points : [])
+                          const currentId = Number(data?.establishment_id || 0) || null
+                          const current = currentId ? (points || []).find((p) => Number(p.id) === currentId) : null
+                          setEstablishment(current || null, { persist: true })
+                        } catch {
+                          setEstablishments([])
+                          setEstablishment(null, { persist: true })
+                        }
                       } catch {
                         // ignore
                       }
@@ -234,6 +273,42 @@ export default function DashboardLayout() {
                     </option>
                   ))}
                 </select>
+
+                {canSwitchEstablishment ? (
+                  <>
+                    <div className="text-xs font-semibold text-slate-400">Ponto</div>
+                    <select
+                      value={establishment?.id ? String(establishment.id) : ''}
+                      disabled={switchingEstablishment || !establishments?.length}
+                      onChange={async (e) => {
+                        const nextId = e.target.value
+                        if (!nextId) return
+                        setSwitchingEstablishment(true)
+                        try {
+                          const row = await switchMyEstablishment(nextId)
+                          setEstablishment(row, { persist: true })
+                          try {
+                            const data = await getMe()
+                            setMe(data, { persist: true })
+                          } catch {
+                            // ignore
+                          }
+                          bumpContext()
+                        } finally {
+                          setSwitchingEstablishment(false)
+                        }
+                      }}
+                      className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
+                    >
+                      {!establishments?.length ? <option value="">Sem pontos</option> : null}
+                      {(establishments || []).map((p) => (
+                        <option key={p.id} value={String(p.id)}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                ) : null}
               </div>
             </div>
 
@@ -252,6 +327,16 @@ export default function DashboardLayout() {
                     try {
                       const data = await getMe()
                       setMe(data, { persist: true })
+                      try {
+                        const points = await listEstablishments({ branch_id: b.id })
+                        setEstablishments(Array.isArray(points) ? points : [])
+                        const currentId = Number(data?.establishment_id || 0) || null
+                        const current = currentId ? (points || []).find((p) => Number(p.id) === currentId) : null
+                        setEstablishment(current || null, { persist: true })
+                      } catch {
+                        setEstablishments([])
+                        setEstablishment(null, { persist: true })
+                      }
                     } catch {
                       // ignore
                     }
@@ -270,6 +355,41 @@ export default function DashboardLayout() {
                   </option>
                 ))}
               </select>
+
+              {canSwitchEstablishment ? (
+                <div className="mt-2">
+                  <select
+                    value={establishment?.id ? String(establishment.id) : ''}
+                    disabled={switchingEstablishment || !establishments?.length}
+                    onChange={async (e) => {
+                      const nextId = e.target.value
+                      if (!nextId) return
+                      setSwitchingEstablishment(true)
+                      try {
+                        const row = await switchMyEstablishment(nextId)
+                        setEstablishment(row, { persist: true })
+                        try {
+                          const data = await getMe()
+                          setMe(data, { persist: true })
+                        } catch {
+                          // ignore
+                        }
+                        bumpContext()
+                      } finally {
+                        setSwitchingEstablishment(false)
+                      }
+                    }}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
+                  >
+                    {!establishments?.length ? <option value="">Sem pontos</option> : null}
+                    {(establishments || []).map((p) => (
+                      <option key={p.id} value={String(p.id)}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </div>
           </header>
           <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-950 text-slate-100">

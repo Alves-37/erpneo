@@ -5,8 +5,14 @@ export async function createSale(payload) {
   return res.data
 }
 
-export async function listSales({ limit = 50, offset = 0 } = {}) {
-  const res = await apiClient.get('/sales', { params: { limit, offset } })
+export async function listSales({ limit = 50, offset = 0, establishment_id } = {}) {
+  const res = await apiClient.get('/sales', {
+    params: {
+      limit,
+      offset,
+      establishment_id: establishment_id != null ? Number(establishment_id) : undefined,
+    },
+  })
   return res.data
 }
 

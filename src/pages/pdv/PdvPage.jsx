@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { listCompanies } from '../../api/companies.js'
-import { getMyBranch, listBranches, switchMyBranch } from '../../api/branches.js'
+import { getMyBranch } from '../../api/branches.js'
 import { issueFiscalDocumentFromSale } from '../../api/fiscalDocuments.js'
 import { listOrders } from '../../api/orders.js'
 import { listProductCategories } from '../../api/productCategories.js'
@@ -11,6 +11,7 @@ import { listRestaurantTables } from '../../api/restaurantTables.js'
 import { createSale } from '../../api/sales.js'
 import { createDebt } from '../../api/debts.js'
 import { convertQuoteToSale, createQuote, deleteQuote, listQuotes, updateQuote } from '../../api/quotes.js'
+import { closeCashSession, getCurrentCashSession, getCashSessionSummary, openCashSession } from '../../api/cashSessions.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 
@@ -48,11 +49,11 @@ export default function PdvPage() {
   const me = useAuthStore((s) => s.me)
   const setBranchGlobal = useAuthStore((s) => s.setBranch)
   const bumpContext = useAuthStore((s) => s.bumpContext)
+  const contextVersion = useAuthStore((s) => s.contextVersion)
+  const establishment = useAuthStore((s) => s.establishment)
 
   const [company, setCompany] = useState(null)
   const [branch, setBranch] = useState(null)
-  const [branches, setBranches] = useState([])
-  const [switchingBranch, setSwitchingBranch] = useState(false)
   const businessType = branch?.business_type || 'retail'
   const isRestaurant = businessType === 'restaurant'
 
@@ -79,6 +80,15 @@ export default function PdvPage() {
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [paid, setPaid] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const [cashSession, setCashSession] = useState(null)
+  const [cashLoading, setCashLoading] = useState(false)
+  const [openCashOpen, setOpenCashOpen] = useState(false)
+  const [cashOpeningBalance, setCashOpeningBalance] = useState('')
+  const [openCashClose, setOpenCashClose] = useState(false)
+  const [cashClosingCounted, setCashClosingCounted] = useState('')
+  const [cashClosingNotes, setCashClosingNotes] = useState('')
+  const [cashSummary, setCashSummary] = useState(null)
 
   const [includeTax, setIncludeTax] = useState(true)
 
@@ -279,7 +289,14 @@ export default function PdvPage() {
   }
 
   async function loadProducts(query = q) {
-    const products = await listProducts({ q: query, is_active: true, in_stock: true })
+    const role = (me?.role || '').toString().trim().toLowerCase()
+    const isAdmin = role === 'admin' || role === 'owner'
+    const products = await listProducts({
+      q: query,
+      is_active: true,
+      in_stock: true,
+      establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
+    })
     setItems(products || [])
   }
 
@@ -300,25 +317,49 @@ export default function PdvPage() {
     }
   }
 
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const list = await listBranches()
-        if (mounted) setBranches(Array.isArray(list) ? list : [])
-      } catch {
-        if (mounted) setBranches([])
-      }
-    })()
-    return () => {
-      mounted = false
+  async function refreshCashSession() {
+    if (!branch?.id) {
+      setCashSession(null)
+      return
     }
-  }, [])
+    if (isTableOrder) {
+      setCashSession(null)
+      setOpenCashOpen(false)
+      return
+    }
+    try {
+      setCashLoading(true)
+      const row = await getCurrentCashSession()
+      setCashSession(row || null)
+      setOpenCashOpen(!row)
+    } catch {
+      setCashSession(null)
+      setOpenCashOpen(true)
+    } finally {
+      setCashLoading(false)
+    }
+  }
 
   useEffect(() => {
     loadInitial()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    refreshCashSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branch?.id, isTableOrder, contextVersion])
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        await loadProducts(q)
+      } catch {
+        setItems([])
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextVersion, establishment?.id])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -645,7 +686,16 @@ export default function PdvPage() {
       setOpenConfirm(false)
       clearCart()
       setIncludeTax(true)
-    } catch {
+    } catch (err) {
+      const status = err?.response?.status
+      const msg = err?.response?.data?.detail
+      if (status === 409 && String(msg || '').toLowerCase().includes('caixa')) {
+        setOpenConfirm(false)
+        await refreshCashSession()
+        setOpenCashOpen(true)
+        toast.error('Caixa fechado. Abra o caixa para registrar vendas.')
+        return
+      }
       toast.error(isRestaurant && normalizedChannel === 'table' ? 'Não foi possível processar o pedido agora.' : 'Não foi possível finalizar a venda agora.')
     } finally {
       setSaving(false)
@@ -664,6 +714,33 @@ export default function PdvPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                {!isTableOrder ? (
+                  <button
+                    type="button"
+                    disabled={cashLoading}
+                    onClick={async () => {
+                      await refreshCashSession()
+                      if (cashSession?.id) {
+                        try {
+                          const s = await getCashSessionSummary(Number(cashSession.id))
+                          setCashSummary(s || null)
+                        } catch {
+                          setCashSummary(null)
+                        }
+                        setCashClosingCounted('')
+                        setCashClosingNotes('')
+                        setOpenCashClose(true)
+                      } else {
+                        setOpenCashOpen(true)
+                      }
+                    }}
+                    className={`rounded-xl border ${cashSession?.id ? 'border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50 text-emerald-200' : 'border-amber-900/60 bg-amber-950/30 hover:bg-amber-950/50 text-amber-200'} px-3 py-2.5 text-xs font-semibold disabled:opacity-60`}
+                    title={cashSession?.id ? 'Caixa aberto' : 'Caixa fechado'}
+                  >
+                    {cashSession?.id ? 'Caixa aberto' : 'Abrir caixa'}
+                  </button>
+                ) : null}
+
                 <button
                   type="button"
                   onClick={async () => {
@@ -751,39 +828,6 @@ export default function PdvPage() {
                   type="text"
                 />
               </div>
-            </div>
-
-            <div className="mt-3 w-full">
-              <select
-                value={branch?.id ? String(branch.id) : ''}
-                disabled={switchingBranch}
-                onChange={async (e) => {
-                  const nextId = e.target.value
-                  if (!nextId) return
-                  setSwitchingBranch(true)
-                  try {
-                    const b = await switchMyBranch(nextId)
-                    setBranch(b)
-                    setBranchGlobal(b, { persist: true })
-                    bumpContext()
-                    setActiveCategoryId('')
-                    await loadCategories(b?.business_type || 'retail')
-                    await loadProducts('')
-                  } catch {
-                    toast.error('Não foi possível trocar a filial agora.')
-                  } finally {
-                    setSwitchingBranch(false)
-                  }
-                }}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
-              >
-                {!branches?.length ? <option value="">Sem filiais</option> : null}
-                {(branches || []).map((b) => (
-                  <option key={b.id} value={String(b.id)}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {isRestaurant ? (
@@ -1459,6 +1503,146 @@ export default function PdvPage() {
       </Modal>
 
       <Modal
+        open={openCashOpen && !isTableOrder}
+        title="Abrir caixa"
+        onClose={() => {
+          if (cashSession?.id) {
+            setOpenCashOpen(false)
+          }
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-200">Informe o fundo de caixa (troco inicial).</div>
+          <label className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-400">Valor de abertura</div>
+            <input
+              value={cashOpeningBalance}
+              onChange={(e) => setCashOpeningBalance(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              inputMode="decimal"
+              placeholder="0.00"
+              type="text"
+            />
+          </label>
+
+          <button
+            type="button"
+            disabled={cashLoading}
+            onClick={async () => {
+              const n = Number(String(cashOpeningBalance || '').replace(',', '.'))
+              if (!Number.isFinite(n) || n < 0) {
+                toast.error('Valor de abertura inválido.')
+                return
+              }
+              try {
+                setCashLoading(true)
+                const row = await openCashSession({ opening_balance: n })
+                setCashSession(row || null)
+                setOpenCashOpen(false)
+                toast.success('Caixa aberto.')
+              } catch (err) {
+                const msg = err?.response?.data?.detail || 'Não foi possível abrir o caixa agora.'
+                toast.error(msg)
+              } finally {
+                setCashLoading(false)
+              }
+            }}
+            className="w-full rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {cashLoading ? 'Abrindo...' : 'Abrir caixa'}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openCashClose && !isTableOrder}
+        title="Fechar caixa"
+        onClose={() => {
+          if (!cashLoading) setOpenCashClose(false)
+        }}
+      >
+        <div className="grid gap-4">
+          {cashSummary ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-sm">
+              <div className="flex items-center justify-between text-slate-300">
+                <div>Esperado (dinheiro)</div>
+                <div className="font-semibold text-white">{Number(cashSummary.expected_cash || 0).toFixed(2)} MZN</div>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <div className="text-slate-400">Vendas</div>
+                <div className="text-right text-slate-200">{Number(cashSummary.gross_total || 0).toFixed(2)} MZN</div>
+              </div>
+            </div>
+          ) : null}
+
+          <label className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-400">Valor contado</div>
+            <input
+              value={cashClosingCounted}
+              onChange={(e) => setCashClosingCounted(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              inputMode="decimal"
+              placeholder="0.00"
+              type="text"
+            />
+          </label>
+
+          <label className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-400">Observações (opcional)</div>
+            <input
+              value={cashClosingNotes}
+              onChange={(e) => setCashClosingNotes(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              placeholder="Ex: sangria, diferença, etc."
+              type="text"
+            />
+          </label>
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              disabled={cashLoading}
+              onClick={() => setOpenCashClose(false)}
+              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              disabled={cashLoading || !cashSession?.id}
+              onClick={async () => {
+                const n = Number(String(cashClosingCounted || '').replace(',', '.'))
+                if (!Number.isFinite(n) || n < 0) {
+                  toast.error('Valor contado inválido.')
+                  return
+                }
+                try {
+                  setCashLoading(true)
+                  await closeCashSession(Number(cashSession.id), {
+                    closing_balance_counted: n,
+                    notes: String(cashClosingNotes || '').trim() || null,
+                  })
+                  toast.success('Caixa fechado.')
+                  setOpenCashClose(false)
+                  setCashSession(null)
+                  setCashSummary(null)
+                  setOpenCashOpen(true)
+                } catch (err) {
+                  const msg = err?.response?.data?.detail || 'Não foi possível fechar o caixa agora.'
+                  toast.error(msg)
+                } finally {
+                  setCashLoading(false)
+                }
+              }}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {cashLoading ? 'Fechando...' : 'Fechar caixa'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         open={openQuoteDelete}
         title="Eliminar cotação"
         onClose={() => {
@@ -1773,4 +1957,3 @@ export default function PdvPage() {
     </div>
   )
 }
-

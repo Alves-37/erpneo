@@ -5,31 +5,38 @@ import { useAuthStore } from '../../store/authStore.js'
 export default function DashboardPage() {
   const me = useAuthStore((s) => s.me)
   const isCashier = (me?.role || '').toLowerCase() === 'cashier'
+  const establishment = useAuthStore((s) => s.establishment)
+  const contextVersion = useAuthStore((s) => s.contextVersion)
+
+  const role = (me?.role || '').toString().trim().toLowerCase()
+  const isAdmin = role === 'admin' || role === 'owner'
 
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState(null)
   const [series, setSeries] = useState([])
 
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const [s, ss] = await Promise.all([getDashboardSummary(), getDashboardSalesSeries({ days: 30 })])
-        if (!mounted) return
-        setSummary(s)
-        setSeries(ss || [])
-      } catch {
-        if (!mounted) return
-        setSummary(null)
-        setSeries([])
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    })()
-    return () => {
-      mounted = false
+  async function refresh() {
+    setLoading(true)
+    try {
+      const estId = isAdmin ? (establishment?.id || undefined) : undefined
+      const [s, ss] = await Promise.all([
+        getDashboardSummary({ establishment_id: estId }),
+        getDashboardSalesSeries({ days: 30, establishment_id: estId }),
+      ])
+      setSummary(s)
+      setSeries(ss || [])
+    } catch {
+      setSummary(null)
+      setSeries([])
+    } finally {
+      setLoading(false)
     }
-  }, [])
+  }
+
+  useEffect(() => {
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextVersion, establishment?.id, me?.role])
 
   const fmtMoney = useMemo(() => {
     try {
@@ -69,7 +76,7 @@ export default function DashboardPage() {
         </div>
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={refresh}
           className="hidden sm:inline-flex rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-3 sm:px-4 py-2.5 text-sm text-slate-100 whitespace-nowrap"
         >
           Atualizar

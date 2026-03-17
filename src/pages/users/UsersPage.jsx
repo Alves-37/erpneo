@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import { createUser, deleteUser, listUsers, updateUser } from '../../api/users.js'
+import { listEstablishments } from '../../api/establishments.js'
+import { getMyBranch } from '../../api/branches.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 
@@ -36,6 +38,14 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState([])
   const contextVersion = useAuthStore((s) => s.contextVersion)
+  const me = useAuthStore((s) => s.me)
+  const branch = useAuthStore((s) => s.branch)
+
+  const role = (me?.role || '').toString().trim().toLowerCase()
+  const isAdmin = role === 'admin' || role === 'owner'
+
+  const [establishments, setEstablishments] = useState([])
+  const establishmentsById = useState(() => new Map())[0]
 
   const [openModal, setOpenModal] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -53,6 +63,7 @@ export default function UsersPage() {
     email: '',
     password: '',
     role: 'admin',
+    establishment_id: '',
     is_active: true,
   })
 
@@ -63,6 +74,7 @@ export default function UsersPage() {
       email: '',
       password: '',
       role: 'admin',
+      establishment_id: '',
       is_active: true,
     })
     setEditing(null)
@@ -83,8 +95,9 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
+    loadEstablishments()
     load()
-  }, [contextVersion])
+  }, [contextVersion, branch?.id])
 
   function openCreate() {
     resetForm()
@@ -98,10 +111,25 @@ export default function UsersPage() {
       email: row.email || '',
       password: '',
       role: row.role || 'admin',
+      establishment_id: row.establishment_id ? String(row.establishment_id) : '',
       is_active: row.is_active ?? true,
     })
     setEditing(row)
     setOpenModal(true)
+  }
+
+  async function loadEstablishments() {
+    try {
+      const b = branch?.id ? branch : await getMyBranch()
+      const list = await listEstablishments({ branch_id: b?.id })
+      const rows = Array.isArray(list) ? list : []
+      setEstablishments(rows)
+      establishmentsById.clear()
+      for (const p of rows) establishmentsById.set(Number(p.id), p)
+    } catch {
+      setEstablishments([])
+      establishmentsById.clear()
+    }
   }
 
   async function handleSave(e) {
@@ -119,6 +147,10 @@ export default function UsersPage() {
         email: formData.email.trim(),
         password: formData.password.trim() || undefined,
         role: formData.role,
+      }
+
+      if (isAdmin) {
+        payload.establishment_id = formData.establishment_id ? Number(formData.establishment_id) : null
       }
       if (editing) {
         await updateUser(editing.id, payload)
@@ -218,6 +250,9 @@ export default function UsersPage() {
                     </div>
                     <div className="truncate" title={r.role || ''}>
                       <span className="text-slate-500">Role:</span> {r.role || '-'}
+                    </div>
+                    <div className="truncate" title={establishmentsById.get(Number(r.establishment_id || 0))?.name || ''}>
+                      <span className="text-slate-500">Ponto:</span> {establishmentsById.get(Number(r.establishment_id || 0))?.name || '-'}
                     </div>
                   </div>
                 </div>
@@ -324,71 +359,86 @@ export default function UsersPage() {
 
       <Modal
         open={openModal}
-        title={editing ? 'Editar Usuário' : 'Novo Usuário'}
-        onClose={resetForm}
+        title={editing ? 'Editar usuário' : 'Novo usuário'}
+        onClose={() => !saving && resetForm()}
       >
-        <form onSubmit={handleSave} className="grid gap-4">
-          <>
-            <div className="grid gap-2">
-              <label className="text-xs font-semibold text-slate-400">Nome</label>
-              <input
-                value={formData.name}
-                onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                placeholder="Nome completo"
-                required
-              />
-            </div>
+        <form className="grid gap-4" onSubmit={handleSave}>
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Nome</div>
+            <input
+              value={formData.name}
+              onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              placeholder="Nome completo"
+              required
+            />
+          </label>
 
-            <div className="grid gap-2">
-              <label className="text-xs font-semibold text-slate-400">Username</label>
-              <input
-                value={formData.username}
-                onChange={(e) => setFormData((f) => ({ ...f, username: e.target.value }))}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                placeholder="usuario"
-                required
-              />
-            </div>
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Username</div>
+            <input
+              value={formData.username}
+              onChange={(e) => setFormData((f) => ({ ...f, username: e.target.value }))}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              placeholder="usuario"
+              required
+            />
+          </label>
 
-            <div className="grid gap-2">
-              <label className="text-xs font-semibold text-slate-400">E-mail</label>
-              <input
-                value={formData.email}
-                onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                placeholder="email@exemplo.com"
-                type="email"
-                required
-              />
-            </div>
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">E-mail</div>
+            <input
+              value={formData.email}
+              onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              placeholder="email@exemplo.com"
+              type="email"
+              required
+            />
+          </label>
 
-            <div className="grid gap-2">
-              <label className="text-xs font-semibold text-slate-400">Senha</label>
-              <input
-                value={formData.password}
-                onChange={(e) => setFormData((f) => ({ ...f, password: e.target.value }))}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                placeholder={editing ? 'Nova senha (opcional)' : 'Senha'}
-                type="password"
-                required={!editing}
-              />
-            </div>
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Senha</div>
+            <input
+              value={formData.password}
+              onChange={(e) => setFormData((f) => ({ ...f, password: e.target.value }))}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              placeholder={editing ? 'Nova senha (opcional)' : 'Senha'}
+              type="password"
+              required={!editing}
+            />
+          </label>
 
-            <div className="grid gap-2">
-              <label className="text-xs font-semibold text-slate-400">Papel (role)</label>
+          <label className="grid gap-2">
+            <div className="text-sm font-medium text-slate-200">Role</div>
+            <select
+              value={formData.role}
+              onChange={(e) => setFormData((s) => ({ ...s, role: e.target.value }))}
+              className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+            >
+              <option value="admin">Admin</option>
+              <option value="owner">Owner</option>
+              <option value="cashier">Cashier</option>
+            </select>
+          </label>
+
+          {isAdmin ? (
+            <label className="grid gap-2">
+              <div className="text-sm font-medium text-slate-200">Ponto</div>
               <select
-                value={formData.role}
-                onChange={(e) => setFormData((f) => ({ ...f, role: e.target.value }))}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                value={formData.establishment_id}
+                onChange={(e) => setFormData((s) => ({ ...s, establishment_id: e.target.value }))}
+                className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
               >
-                <option value="admin">Admin</option>
-                <option value="manager">Gerente</option>
-                <option value="cashier">Caixa</option>
-                <option value="waiter">Garçom</option>
+                {!establishments?.length ? <option value="">Sem pontos</option> : <option value="">(Sem ponto)</option>}
+                {(establishments || []).map((p) => (
+                  <option key={p.id} value={String(p.id)}>
+                    {p.name}
+                  </option>
+                ))}
               </select>
-            </div>
-          </>
+            </label>
+          ) : null}
 
           <div className="flex items-center gap-3">
             <input

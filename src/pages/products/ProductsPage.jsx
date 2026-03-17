@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { listCompanies } from '../../api/companies.js'
 import { getMyBranch } from '../../api/branches.js'
+import { listEstablishments } from '../../api/establishments.js'
 import { listProductCategories } from '../../api/productCategories.js'
 import { createProduct, deleteProduct, listProductImages, listProducts, updateProduct, uploadProductImage } from '../../api/products.js'
 import { listSuppliers } from '../../api/suppliers.js'
@@ -51,9 +52,15 @@ export default function ProductsPage() {
   const businessType = branch?.business_type || 'retail'
   const isRestaurant = businessType === 'restaurant'
   const isBar = businessType === 'bar'
+  const isPharmacy = businessType === 'pharmacy'
+  const isReprography = businessType === 'reprography'
   const allowsImages = isRestaurant || isBar
 
+  const me = useAuthStore((s) => s.me)
+  const establishment = useAuthStore((s) => s.establishment)
+
   const token = useAuthStore((s) => s.token)
+  const contextVersion = useAuthStore((s) => s.contextVersion)
 
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
 
@@ -64,6 +71,7 @@ export default function ProductsPage() {
   const [q, setQ] = useState('')
   const [onlyLowStock, setOnlyLowStock] = useState(false)
   const [showInactiveOnly, setShowInactiveOnly] = useState(false)
+  const [filterCategoryId, setFilterCategoryId] = useState('')
 
   const [openCreate, setOpenCreate] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -90,6 +98,13 @@ export default function ProductsPage() {
   const [images, setImages] = useState([])
   const [creating, setCreating] = useState(false)
 
+  const [establishments, setEstablishments] = useState([])
+  const establishmentsById = useMemo(() => {
+    const map = new Map()
+    for (const p of establishments || []) map.set(Number(p.id), p)
+    return map
+  }, [establishments])
+
   const [categories, setCategories] = useState([])
   const [categoryMode, setCategoryMode] = useState('select')
   const [categoryId, setCategoryId] = useState('')
@@ -100,6 +115,11 @@ export default function ProductsPage() {
 
   const [locations, setLocations] = useState([])
   const [defaultLocationId, setDefaultLocationId] = useState('')
+
+  const [establishmentId, setEstablishmentId] = useState('')
+
+  const role = (me?.role || '').toString().trim().toLowerCase()
+  const isAdmin = role === 'admin' || role === 'owner'
 
   const canCreate = useMemo(() => name.trim().length > 0, [name])
 
@@ -178,7 +198,22 @@ export default function ProductsPage() {
       }
       const b = await getMyBranch()
       setBranch(b)
-      const products = await listProducts({ q, low_stock: onlyLowStock && !showInactiveOnly, is_active: showInactiveOnly ? false : true })
+      let points = []
+      try {
+        points = await listEstablishments({ branch_id: b?.id })
+        setEstablishments(Array.isArray(points) ? points : [])
+      } catch {
+        setEstablishments([])
+        points = []
+      }
+
+      const products = await listProducts({
+        q,
+        low_stock: onlyLowStock && !showInactiveOnly,
+        is_active: showInactiveOnly ? false : true,
+        establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
+        category_id: filterCategoryId ? Number(filterCategoryId) : undefined,
+      })
       setItems(products || [])
 
       if (!company) {
@@ -212,7 +247,17 @@ export default function ProductsPage() {
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
+  }, [token, contextVersion])
+
+  useEffect(() => {
+    if (!token) return
+    loadCategories(businessType)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, businessType])
+
+  useEffect(() => {
+    if (!isReprography) setIsService(false)
+  }, [isReprography])
 
   useEffect(() => {
     if (!token) {
@@ -245,6 +290,11 @@ export default function ProductsPage() {
   }, [onlyLowStock])
 
   useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterCategoryId])
+
+  useEffect(() => {
     if (showInactiveOnly) setOnlyLowStock(false)
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -271,6 +321,7 @@ export default function ProductsPage() {
     setCategoryName('')
     setSupplierId('')
     setDefaultLocationId('')
+    setEstablishmentId('')
   }
 
   function fillFormFromProduct(p) {
@@ -303,6 +354,12 @@ export default function ProductsPage() {
     }
 
     setImages([])
+
+    if (isAdmin) {
+      setEstablishmentId(p?.establishment_id ? String(p.establishment_id) : '')
+    } else {
+      setEstablishmentId('')
+    }
   }
 
   async function onSubmit(e) {
@@ -354,17 +411,19 @@ export default function ProductsPage() {
       default_location_id: Number(defaultLocationId),
       unit: finalUnit,
       price: price ? Number(price) : 0,
-      cost: isService ? 0 : (cost ? Number(cost) : 0),
+      cost: (isReprography && isService) ? 0 : (cost ? Number(cost) : 0),
       tax_rate: parsedTax,
       min_stock: parsedMinStock,
-      track_stock: isService ? false : trackStock,
-      is_service: isService,
+      track_stock: (isReprography && isService) ? false : trackStock,
+      is_service: isReprography ? isService : false,
       is_active: isActive,
       category_id: categoryMode === 'select' && categoryId ? Number(categoryId) : null,
       category_name: categoryMode === 'new' ? categoryName.trim() : null,
     }
 
-    if (!isService && parsedStockQty !== null) payload.stock_qty = parsedStockQty
+    if (isAdmin && establishmentId) payload.establishment_id = Number(establishmentId)
+
+    if (!(isReprography && isService) && parsedStockQty !== null) payload.stock_qty = parsedStockQty
 
     setCreating(true)
     try {
@@ -454,8 +513,24 @@ export default function ProductsPage() {
           />
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            {isPharmacy && (
+              <div className="w-full sm:w-auto">
+                <select
+                  value={filterCategoryId}
+                  onChange={(e) => setFilterCategoryId(e.target.value)}
+                  className="w-full sm:w-[240px] rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                >
+                  <option value="">Todas categorias</option>
+                  {(categories || []).map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <label className="inline-flex items-center gap-2 text-sm text-slate-200">
               <input
                 type="checkbox"
@@ -572,6 +647,9 @@ export default function ProductsPage() {
                       {p.name}
                     </div>
                     <div className="mt-1 text-xs text-slate-400">
+                      Ponto: <span className="text-slate-200">{establishmentsById.get(Number(p.establishment_id || 0))?.name || '-'}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
                       SKU: <span className="text-slate-200">{p.sku || '-'}</span>
                     </div>
                     <div className="mt-1 text-xs text-slate-400">
@@ -632,8 +710,9 @@ export default function ProductsPage() {
         <div className="mt-4 hidden md:block overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
           <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
             <>
-              <div className="col-span-4">Produto</div>
-              <div className="col-span-2">SKU</div>
+              <div className="col-span-3">Produto</div>
+              <div className="col-span-2">Ponto</div>
+              <div className="col-span-1">SKU</div>
               <div className="col-span-2">Código</div>
               <div className="col-span-1">Unidade</div>
               <div className="col-span-1">IVA</div>
@@ -649,10 +728,13 @@ export default function ProductsPage() {
               {items.map((p) => (
                 <div key={p.id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm items-center">
                   <>
-                    <div className="col-span-4 font-semibold text-slate-100 truncate" title={p.name || ''}>
+                    <div className="col-span-3 font-semibold text-slate-100 truncate" title={p.name || ''}>
                       {p.name}
                     </div>
-                    <div className="col-span-2 text-slate-300 truncate" title={p.sku || ''}>
+                    <div className="col-span-2 text-slate-300 truncate" title={establishmentsById.get(Number(p.establishment_id || 0))?.name || ''}>
+                      {establishmentsById.get(Number(p.establishment_id || 0))?.name || '-'}
+                    </div>
+                    <div className="col-span-1 text-slate-300 truncate" title={p.sku || ''}>
                       {p.sku || '-'}
                     </div>
                     <div className="col-span-2 text-slate-300 truncate" title={p.barcode || ''}>
@@ -769,24 +851,26 @@ export default function ProductsPage() {
         }}
       >
         <form className="grid gap-4" onSubmit={onSubmit}>
-          <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-            <input
-              type="checkbox"
-              checked={isService}
-              onChange={(e) => {
-                const v = e.target.checked
-                setIsService(v)
-                if (v) {
-                  setTrackStock(false)
-                  setMinStock('')
-                  setStockQty('')
-                  setCost('')
-                }
-              }}
-              className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
-            />
-            É serviço (sem stock e sem custo)
-          </label>
+          {isReprography ? (
+            <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={isService}
+                onChange={(e) => {
+                  const v = e.target.checked
+                  setIsService(v)
+                  if (v) {
+                    setTrackStock(false)
+                    setMinStock('')
+                    setStockQty('')
+                    setCost('')
+                  }
+                }}
+                className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+              />
+              É serviço (sem stock e sem custo)
+            </label>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="grid gap-2">
@@ -799,6 +883,24 @@ export default function ProductsPage() {
                 type="text"
               />
             </label>
+
+            {isAdmin ? (
+              <label className="grid gap-2">
+                <div className="text-sm font-medium text-slate-200">Ponto</div>
+                <select
+                  value={establishmentId}
+                  onChange={(e) => setEstablishmentId(e.target.value)}
+                  className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                >
+                  {!establishments?.length ? <option value="">Sem pontos</option> : <option value="">(Ponto do usuário)</option>}
+                  {(establishments || []).map((p) => (
+                    <option key={p.id} value={String(p.id)}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
 
             <label className="grid gap-2">
               <div className="text-sm font-medium text-slate-200">Unidade</div>
@@ -961,7 +1063,7 @@ export default function ProductsPage() {
                   className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
                   placeholder="0.00"
                   {...numericProps()}
-                  disabled={isService}
+                  disabled={isReprography && isService}
                 />
               </label>
             </div>
@@ -976,7 +1078,7 @@ export default function ProductsPage() {
                 className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
                 placeholder="Ex: 10"
                 {...numericProps()}
-                disabled={isService}
+                disabled={isReprography && isService}
               />
             </div>
 
@@ -988,7 +1090,7 @@ export default function ProductsPage() {
                 className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
                 placeholder="Ex: 2"
                 {...numericProps()}
-                disabled={isService}
+                disabled={isReprography && isService}
               />
             </div>
           </div>
@@ -1000,7 +1102,7 @@ export default function ProductsPage() {
                 checked={trackStock}
                 onChange={(e) => setTrackStock(e.target.checked)}
                 className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
-                disabled={isService}
+                disabled={isReprography && isService}
               />
               Controla estoque
             </label>

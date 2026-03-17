@@ -10,6 +10,14 @@ export const useAuthStore = create((set) => ({
       return null
     }
   })(),
+  establishment: (() => {
+    try {
+      const raw = localStorage.getItem('establishment')
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  })(),
   branch: (() => {
     try {
       const raw = localStorage.getItem('branch')
@@ -35,6 +43,14 @@ export const useAuthStore = create((set) => ({
     }
     set({ me })
   },
+  setEstablishment: (establishment, options = { persist: true }) => {
+    const persist = options?.persist !== false
+    if (persist) {
+      if (establishment) localStorage.setItem('establishment', JSON.stringify(establishment))
+      else localStorage.removeItem('establishment')
+    }
+    set({ establishment })
+  },
   setBranch: (branch, options = { persist: true }) => {
     const persist = options?.persist !== false
     if (persist) {
@@ -47,7 +63,8 @@ export const useAuthStore = create((set) => ({
   logout: () => {
     localStorage.removeItem('token')
     localStorage.removeItem('me')
+    localStorage.removeItem('establishment')
     localStorage.removeItem('branch')
-    set({ token: null, me: null, branch: null, contextVersion: 0 })
+    set({ token: null, me: null, establishment: null, branch: null, contextVersion: 0 })
   },
 }))

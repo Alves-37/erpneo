@@ -3,8 +3,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { listCompanies } from '../../api/companies.js'
 import { listCustomers } from '../../api/customers.js'
 import { getDashboardSummary } from '../../api/dashboard.js'
+import { listEstablishments } from '../../api/establishments.js'
 import { issueFiscalDocumentFromSale, listFiscalDocumentsBySaleId } from '../../api/fiscalDocuments.js'
 import { listSales } from '../../api/sales.js'
+import { useAuthStore } from '../../store/authStore.js'
 import { toast } from '../../services/toast.js'
 
 function Modal({ open, title, children, onClose }) {
@@ -36,11 +38,26 @@ function Modal({ open, title, children, onClose }) {
 }
 
 export default function SalesPage() {
+  const me = useAuthStore((s) => s.me)
+  const branch = useAuthStore((s) => s.branch)
+  const establishment = useAuthStore((s) => s.establishment)
+  const contextVersion = useAuthStore((s) => s.contextVersion)
+
+  const role = (me?.role || '').toString().trim().toLowerCase()
+  const isAdmin = role === 'admin' || role === 'owner'
+
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState(null)
   const [sales, setSales] = useState([])
   const [openDetails, setOpenDetails] = useState(false)
   const [activeSale, setActiveSale] = useState(null)
+
+  const [establishments, setEstablishments] = useState([])
+  const establishmentsById = useMemo(() => {
+    const map = new Map()
+    for (const p of establishments || []) map.set(Number(p.id), p)
+    return map
+  }, [establishments])
 
   const [company, setCompany] = useState(null)
 
@@ -58,27 +75,46 @@ export default function SalesPage() {
   const [saleDocsLoading, setSaleDocsLoading] = useState(false)
   const [saleDocs, setSaleDocs] = useState([])
 
+  async function refresh() {
+    setLoading(true)
+    try {
+      let points = []
+      try {
+        const list = await listEstablishments({ branch_id: branch?.id })
+        points = Array.isArray(list) ? list : []
+      } catch {
+        points = []
+      }
+
+      const [s, rows] = await Promise.all([
+        getDashboardSummary({ establishment_id: isAdmin ? (establishment?.id || undefined) : undefined }),
+        listSales({ limit: 100, offset: 0, establishment_id: isAdmin ? (establishment?.id || undefined) : undefined }),
+      ])
+      setSummary(s)
+      setSales(rows || [])
+      setEstablishments(points)
+    } catch {
+      setSummary(null)
+      setSales([])
+      setEstablishments([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branch?.id, contextVersion, establishment?.id])
+
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
-        const [s, rows] = await Promise.all([getDashboardSummary(), listSales({ limit: 100, offset: 0 })])
-        if (!mounted) return
-        setSummary(s)
-        setSales(rows || [])
-
-        try {
-          const companies = await listCompanies()
-          if (mounted) setCompany(companies?.[0] || null)
-        } catch {
-          if (mounted) setCompany(null)
-        }
+        const companies = await listCompanies()
+        if (mounted) setCompany(companies?.[0] || null)
       } catch {
-        if (!mounted) return
-        setSummary(null)
-        setSales([])
-      } finally {
-        if (mounted) setLoading(false)
+        if (mounted) setCompany(null)
       }
     })()
     return () => {
@@ -201,7 +237,7 @@ export default function SalesPage() {
         </div>
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={refresh}
           className="w-full sm:w-auto rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
         >
           Atualizar
@@ -228,6 +264,11 @@ export default function SalesPage() {
         <div className="border-b border-slate-800 px-5 py-4">
           <div className="text-sm font-semibold text-white">Vendas recentes</div>
           <div className="mt-1 text-xs text-slate-400">Clique em atualizar após finalizar uma venda no PDV</div>
+          {isAdmin ? (
+            <div className="mt-3 text-xs text-slate-400">
+              Ponto ativo: <span className="text-slate-100">{establishment?.name || '-'}</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto">
@@ -251,6 +292,9 @@ export default function SalesPage() {
                         <div className="text-sm font-semibold text-white">Venda #{s.id}</div>
                         <div className="mt-1 text-xs text-slate-400">
                           {s?.created_at ? fmtDateTime.format(new Date(s.created_at)) : '-'}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          Ponto: <span className="text-slate-200">{establishmentsById.get(Number(s.establishment_id || 0))?.name || '-'}</span>
                         </div>
                       </div>
 
@@ -305,6 +349,7 @@ export default function SalesPage() {
                 <tr>
                   <th className="px-5 py-3 text-left font-semibold">ID</th>
                   <th className="px-5 py-3 text-left font-semibold">Caixa</th>
+                  <th className="px-5 py-3 text-left font-semibold">Ponto</th>
                   <th className="px-5 py-3 text-left font-semibold">Data</th>
                   <th className="px-5 py-3 text-left font-semibold">Tipo</th>
                   <th className="px-5 py-3 text-left font-semibold">Mesa</th>
@@ -324,6 +369,7 @@ export default function SalesPage() {
                   >
                     <td className="px-5 py-3 text-slate-200">#{s.id}</td>
                     <td className="px-5 py-3 text-slate-200">{s?.cashier_name || '-'}</td>
+                    <td className="px-5 py-3 text-slate-200">{establishmentsById.get(Number(s.establishment_id || 0))?.name || '-'}</td>
                     <td className="px-5 py-3 text-slate-200">{s?.created_at ? fmtDateTime.format(new Date(s.created_at)) : '-'}</td>
                     <td className="px-5 py-3">
                       <span
@@ -346,7 +392,7 @@ export default function SalesPage() {
 
                 {!loading && (!sales || sales.length === 0) && (
                   <tr>
-                    <td className="px-5 py-6 text-center text-slate-400" colSpan={7}>
+                    <td className="px-5 py-6 text-center text-slate-400" colSpan={8}>
                       Sem vendas para mostrar
                     </td>
                   </tr>
@@ -370,6 +416,10 @@ export default function SalesPage() {
           <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
             <div className="text-xs font-semibold text-slate-400">Caixa</div>
             <div className="mt-1 text-sm font-semibold text-white">{activeSale?.cashier_name || '-'}</div>
+            <div className="mt-3 text-xs font-semibold text-slate-400">Ponto</div>
+            <div className="mt-1 text-sm text-slate-200">
+              {establishmentsById.get(Number(activeSale?.establishment_id || 0))?.name || '-'}
+            </div>
             <div className="mt-3 text-xs font-semibold text-slate-400">Tipo</div>
             <div className="mt-1">
               <span
