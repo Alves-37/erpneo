@@ -48,11 +48,11 @@ export default function DashboardPage() {
     }
   }
 
-  async function refresh() {
+  async function refresh({ forceExpiryAlerts = false } = {}) {
     setLoading(true)
     try {
       const estId = isAdmin ? (establishment?.id || undefined) : undefined
-      const expPromise = isPharmacy && _canFetchExpiryAlerts()
+      const expPromise = isPharmacy && (forceExpiryAlerts || _canFetchExpiryAlerts())
         ? getDashboardExpiryAlerts({ days: 30, limit: 8, establishment_id: estId }).catch((err) => {
             if (err?.response?.status === 404) {
               _disableExpiryAlertsTemporarily()
@@ -124,7 +124,7 @@ export default function DashboardPage() {
         </div>
         <button
           type="button"
-          onClick={refresh}
+          onClick={() => refresh({ forceExpiryAlerts: true })}
           className="hidden sm:inline-flex rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-3 sm:px-4 py-2.5 text-sm text-slate-100 whitespace-nowrap"
         >
           Atualizar
@@ -191,16 +191,18 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="inline-flex items-center rounded-xl border border-rose-900/60 bg-rose-950/30 px-2.5 py-1 text-[11px] font-semibold text-rose-200">
-                      {loading ? '-' : expiryAlerts?.expired_count ?? 0}
+                      {loading || !expiryAlerts ? '-' : expiryAlerts?.expired_count ?? 0}
                     </div>
                     <div className="inline-flex items-center rounded-xl border border-amber-900/60 bg-amber-950/25 px-2.5 py-1 text-[11px] font-semibold text-amber-200">
-                      {loading ? '-' : expiryAlerts?.expiring_soon_count ?? 0}
+                      {loading || !expiryAlerts ? '-' : expiryAlerts?.expiring_soon_count ?? 0}
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950">
-                  {(expiryAlerts?.items || []).length ? (
+                  {!expiryAlerts && !loading ? (
+                    <div className="px-3 py-3 text-sm text-slate-300">Carregando alertas...</div>
+                  ) : (expiryAlerts?.items || []).length ? (
                     <div className="divide-y divide-slate-800">
                       {(expiryAlerts?.items || []).slice(0, 3).map((it) => {
                         const daysToExpire = Number(it?.days_to_expire || 0)
