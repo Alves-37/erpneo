@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { getMe } from '../api/auth.js'
 import { getMyBranch, listBranches, switchMyBranch } from '../api/branches.js'
@@ -10,11 +10,7 @@ const nav = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/products', label: 'Produtos' },
   { to: '/categories', label: 'Categorias', pharmacyOnly: true },
-  { to: '/reprography/printers', label: 'Máquinas (Repro)', reprographyOnly: true },
-  { to: '/reprography/counter-types', label: 'Tipos de contador (Repro)', reprographyOnly: true },
-  { to: '/reprography/contracts', label: 'Contratos (Repro)', reprographyOnly: true },
-  { to: '/reprography/readings', label: 'Leituras (Repro)', reprographyOnly: true },
-  { to: '/reprography/billing', label: 'Faturamento (Repro)', reprographyOnly: true },
+  { to: '/reprography/printers', label: 'Impressoras', reprographyOnly: true },
   { to: '/warehouse', label: 'Armazém' },
   { to: '/stock/transfer', label: 'Transferência de Stock' },
   { to: '/stock/adjust', label: 'Ajuste de Stock' },
@@ -59,6 +55,7 @@ export default function DashboardLayout() {
   const [establishments, setEstablishments] = useState([])
   const [switchingEstablishment, setSwitchingEstablishment] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
   const token = useAuthStore((s) => s.token)
   const me = useAuthStore((s) => s.me)
   const setMe = useAuthStore((s) => s.setMe)
@@ -176,7 +173,8 @@ export default function DashboardLayout() {
                   onClick={() => setSidebarOpen(false)}
                   className={({ isActive }) =>
                     `px-4 py-3 rounded-xl text-base font-semibold transition-all duration-150 ${
-                      isActive
+                      (isActive ||
+                      (item.to === '/reprography/printers' && location.pathname.startsWith('/reprography/')))
                         ? 'bg-brand-600 text-white shadow-sm'
                         : 'text-slate-200 bg-slate-900 hover:bg-slate-800 hover:text-white'
                     }`

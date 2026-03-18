@@ -88,6 +88,23 @@ export async function listPrinterReadings({ establishment_id, printer_id, counte
   return res.data
 }
 
+export async function listPdv3PrinterReadings({ establishment_id, printer_id, limit = 200, offset = 0 } = {}) {
+  const res = await apiClient.get('/printers/pdv3/readings', {
+    params: {
+      establishment_id: establishment_id != null ? Number(establishment_id) : undefined,
+      printer_id: printer_id != null ? Number(printer_id) : undefined,
+      limit: limit != null ? Number(limit) : undefined,
+      offset: offset != null ? Number(offset) : undefined,
+    },
+  })
+  return res.data
+}
+
+export async function createPdv3PrinterReading(payload) {
+  const res = await apiClient.post('/printers/pdv3/readings', payload)
+  return res.data
+}
+
 export async function createPrinterReading(payload) {
   const res = await apiClient.post('/printers/readings', payload)
   return res.data
@@ -100,6 +117,29 @@ export async function updatePrinterReading(readingId, payload) {
 
 export async function deletePrinterReading(readingId) {
   const res = await apiClient.delete(`/printers/readings/${Number(readingId)}`)
+  return res.data
+}
+
+export async function getPdv3PrintersBilling({ year, month, establishment_id } = {}) {
+  const res = await apiClient.get('/printers/pdv3/billing', {
+    params: {
+      year: year != null ? Number(year) : undefined,
+      month: month != null ? Number(month) : undefined,
+      establishment_id: establishment_id != null ? Number(establishment_id) : undefined,
+    },
+  })
+  return res.data
+}
+
+export async function generatePdv3PrintersBillingLaunch({ printer_id, year, month, establishment_id, price_per_copy, cost_per_copy } = {}) {
+  const res = await apiClient.post('/printers/pdv3/billing/generate-launch', {
+    printer_id: Number(printer_id),
+    year: Number(year),
+    month: Number(month),
+    establishment_id: establishment_id != null ? Number(establishment_id) : undefined,
+    price_per_copy: Number(price_per_copy),
+    cost_per_copy: cost_per_copy != null ? Number(cost_per_copy) : 0,
+  })
   return res.data
 }
 

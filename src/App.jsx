@@ -23,8 +23,6 @@ import UsersPage from './pages/users/UsersPage.jsx'
 import EstablishmentsPage from './pages/establishments/EstablishmentsPage.jsx'
 import ReprographyBillingPage from './pages/reprography/ReprographyBillingPage.jsx'
 import ReprographyPrintersPage from './pages/reprography/ReprographyPrintersPage.jsx'
-import ReprographyCounterTypesPage from './pages/reprography/ReprographyCounterTypesPage.jsx'
-import ReprographyContractsPage from './pages/reprography/ReprographyContractsPage.jsx'
 import ReprographyReadingsPage from './pages/reprography/ReprographyReadingsPage.jsx'
 import AuthLayout from './layouts/AuthLayout.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
@@ -118,8 +116,6 @@ function App() {
           />
           <Route path="/reprography/billing" element={<ReprographyBillingPage />} />
           <Route path="/reprography/printers" element={<ReprographyPrintersPage />} />
-          <Route path="/reprography/counter-types" element={<ReprographyCounterTypesPage />} />
-          <Route path="/reprography/contracts" element={<ReprographyContractsPage />} />
           <Route path="/reprography/readings" element={<ReprographyReadingsPage />} />
           <Route path="/finance" element={<FinancePage />} />
           <Route path="/reports" element={<ReportsPage />} />

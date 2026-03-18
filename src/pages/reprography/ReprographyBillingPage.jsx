@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { generatePrintersBillingLaunch, getPrintersBilling } from '../../api/printers.js'
+import { generatePdv3PrintersBillingLaunch, getPdv3PrintersBilling } from '../../api/printers.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 
@@ -41,6 +41,13 @@ function money(v) {
   }
 }
 
+function numberOnly(v) {
+  if (v == null) return 0
+  const s = String(v).replace(',', '.').trim()
+  const n = Number(s)
+  return Number.isFinite(n) ? n : 0
+}
+
 export default function ReprographyBillingPage() {
   const me = useAuthStore((s) => s.me)
   const branch = useAuthStore((s) => s.branch)
@@ -62,6 +69,15 @@ export default function ReprographyBillingPage() {
 
   const [openLaunch, setOpenLaunch] = useState(false)
   const [launching, setLaunching] = useState(false)
+  const [launchRow, setLaunchRow] = useState(null)
+  const [pricePerCopy, setPricePerCopy] = useState('5.00')
+  const [costPerCopy, setCostPerCopy] = useState('0.00')
+  const [launchTotal, setLaunchTotal] = useState('0.00')
+
+  const [openDetails, setOpenDetails] = useState(false)
+  const [detailsRow, setDetailsRow] = useState(null)
+  const [detailsPricePerCopy, setDetailsPricePerCopy] = useState('5.00')
+  const [detailsTotal, setDetailsTotal] = useState('0.00')
 
   const effectiveEstId = isAdmin ? (establishment?.id || undefined) : undefined
 
@@ -73,7 +89,7 @@ export default function ReprographyBillingPage() {
 
     setLoading(true)
     try {
-      const data = await getPrintersBilling({ year, month, establishment_id: effectiveEstId })
+      const data = await getPdv3PrintersBilling({ year, month, establishment_id: effectiveEstId })
       setBilling(data)
     } catch (err) {
       const msg = err?.response?.data?.detail || 'Não foi possível carregar o faturamento.'
@@ -89,12 +105,37 @@ export default function ReprographyBillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branch?.id, contextVersion, establishment?.id])
 
+  useEffect(() => {
+    const copiesNew = Number(launchRow?.copies_new || 0)
+    const total = copiesNew * numberOnly(pricePerCopy)
+    setLaunchTotal(money(total))
+  }, [launchRow, pricePerCopy])
+
+  useEffect(() => {
+    const copiesTotal = Number(detailsRow?.copies_total || 0)
+    const total = copiesTotal * numberOnly(detailsPricePerCopy)
+    setDetailsTotal(money(total))
+  }, [detailsRow, detailsPricePerCopy])
+
+  function openLaunchModal(row) {
+    setLaunchRow(row)
+    setPricePerCopy('5.00')
+    setCostPerCopy('0.00')
+    setOpenLaunch(true)
+  }
+
+  function openDetailsModal(row) {
+    setDetailsRow(row)
+    setDetailsPricePerCopy('5.00')
+    setOpenDetails(true)
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="text-xl font-semibold">Reprografia · Faturamento</div>
-          <div className="mt-1 text-sm text-slate-300">Cálculo mensal de excedentes por impressora e tipo.</div>
+          <div className="text-xl font-semibold">Faturamento de Impressões</div>
+          <div className="mt-1 text-sm text-slate-300">Relatório mensal de cópias por impressora.</div>
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
@@ -133,16 +174,6 @@ export default function ReprographyBillingPage() {
           >
             {loading ? 'Carregando...' : 'Atualizar'}
           </button>
-
-          <button
-            type="button"
-            disabled={!billing || launching || !isAdmin}
-            onClick={() => setOpenLaunch(true)}
-            className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-            title={!isAdmin ? 'Apenas admin pode gerar lançamento.' : ''}
-          >
-            Gerar lançamento
-          </button>
         </div>
       </div>
 
@@ -153,75 +184,52 @@ export default function ReprographyBillingPage() {
       ) : null}
 
       {isReprography ? (
-        <div className="mt-6 grid gap-4">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <div className="text-sm font-semibold text-white">Resumo</div>
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <div className="text-xs font-semibold text-slate-400">Excedentes (páginas)</div>
-                <div className="mt-1 text-lg font-semibold">{billing?.total_excess_pages ?? 0}</div>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <div className="text-xs font-semibold text-slate-400">Total a cobrar</div>
-                <div className="mt-1 text-lg font-semibold">{money(billing?.total_excess_amount ?? 0)}</div>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <div className="text-xs font-semibold text-slate-400">Ponto</div>
-                <div className="mt-1 text-sm font-semibold text-slate-200">
-                  {establishment?.name || (isAdmin ? 'Selecione no cabeçalho' : 'Atual')}
-                </div>
-              </div>
+        <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="text-sm font-semibold text-white">Período: {String(month).padStart(2, '0')}/{year}</div>
+          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
+            <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
+              <div className="col-span-3">Impressora</div>
+              <div className="col-span-3">Marca/Modelo</div>
+              <div className="col-span-2">Cópias</div>
+              <div className="col-span-2">Já faturado</div>
+              <div className="col-span-2 text-right">Ações</div>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <div className="text-sm font-semibold text-white">Detalhes</div>
-
-            {!billing?.printers?.length ? (
-              <div className="mt-3 text-sm text-slate-300">Sem contratos/leitura para este período.</div>
+            {loading ? (
+              <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
+            ) : !billing?.rows?.length ? (
+              <div className="px-4 py-6 text-sm text-slate-300">Sem dados para este período.</div>
             ) : (
-              <div className="mt-4 grid gap-4">
-                {(billing.printers || []).map((p) => (
-                  <div key={p.printer_id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-semibold text-white">{p.serial_number || `Impressora #${p.printer_id}`}</div>
-                        <div className="mt-1 text-xs text-slate-400">{[p.brand, p.model].filter(Boolean).join(' · ')}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-semibold text-slate-400">Total excedente</div>
-                        <div className="text-sm font-semibold text-slate-100">{money(p.total_excess_amount || 0)}</div>
+              <div className="divide-y divide-slate-800">
+                {(billing.rows || []).map((r) => {
+                  const disabledLaunch = !isAdmin || Number(r.copies_new || 0) <= 0
+                  return (
+                    <div key={r.printer_id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm items-center">
+                      <div className="col-span-3 font-semibold text-slate-100">{r.serial_number}</div>
+                      <div className="col-span-3 text-slate-300">{`${r.brand || ''} ${r.model || ''}`.trim() || '-'}</div>
+                      <div className="col-span-2 text-slate-200">{r.copies_total ?? 0}</div>
+                      <div className="col-span-2 text-slate-200">{r.copies_billed_to ?? 0}</div>
+                      <div className="col-span-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={disabledLaunch}
+                          onClick={() => openLaunchModal(r)}
+                          className="rounded-lg bg-emerald-700 hover:bg-emerald-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                          title={!isAdmin ? 'Apenas admin' : Number(r.copies_new || 0) <= 0 ? 'Lançamento já gerado' : ''}
+                        >
+                          {Number(r.copies_new || 0) <= 0 ? 'Lançado' : 'Gerar Lançamento'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openDetailsModal(r)}
+                          className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-100"
+                        >
+                          Detalhes
+                        </button>
                       </div>
                     </div>
-
-                    <div className="mt-3 overflow-x-auto">
-                      <table className="min-w-full text-sm">
-                        <thead>
-                          <tr className="text-left text-xs text-slate-400">
-                            <th className="py-2 pr-4">Tipo</th>
-                            <th className="py-2 pr-4">Usado</th>
-                            <th className="py-2 pr-4">Franquia</th>
-                            <th className="py-2 pr-4">Excedente</th>
-                            <th className="py-2 pr-4">Preço</th>
-                            <th className="py-2">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(p.lines || []).map((ln, idx) => (
-                            <tr key={`${ln.printer_id}-${ln.counter_type_id}-${idx}`} className="border-t border-slate-800">
-                              <td className="py-2 pr-4 text-slate-100">{ln.counter_type_name || ln.counter_type_code || ln.counter_type_id}</td>
-                              <td className="py-2 pr-4 text-slate-200">{ln.pages_used ?? 0}</td>
-                              <td className="py-2 pr-4 text-slate-200">{ln.monthly_allowance ?? 0}</td>
-                              <td className="py-2 pr-4 text-slate-200">{ln.excess_pages ?? 0}</td>
-                              <td className="py-2 pr-4 text-slate-200">{money(ln.price_per_page ?? 0)}</td>
-                              <td className="py-2 font-semibold text-slate-100">{money(ln.excess_total ?? 0)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -229,55 +237,122 @@ export default function ReprographyBillingPage() {
       ) : null}
 
       <Modal
+        open={openDetails}
+        title="Detalhes do Faturamento"
+        onClose={() => setOpenDetails(false)}
+      >
+        <div className="grid gap-3 text-sm">
+          <div className="text-slate-200">Impressora: <span className="font-semibold text-white">{detailsRow?.serial_number || '-'}</span></div>
+          <div className="text-slate-200">Marca/Modelo: <span className="font-semibold text-white">{`${detailsRow?.brand || ''} ${detailsRow?.model || ''}`.trim() || '-'}</span></div>
+          <div className="h-px bg-slate-800" />
+          <div className="text-slate-200">Período: <span className="font-semibold text-white">{detailsRow?.month_year || '-'}</span></div>
+          <div className="text-slate-200">Cópias Realizadas: <span className="font-semibold text-white">{detailsRow?.copies_total ?? 0}</span></div>
+
+          <div className="h-px bg-slate-800" />
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <div className="text-xs font-semibold text-slate-400">Valor por Cópia (MT)</div>
+              <input
+                value={detailsPricePerCopy}
+                onChange={(e) => setDetailsPricePerCopy(e.target.value)}
+                className="mt-2 w-40 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                inputMode="decimal"
+                type="text"
+              />
+            </div>
+            <div className="ml-auto text-base font-semibold text-brand-400">Valor Total: MT {detailsTotal}</div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setOpenDetails(false)}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         open={openLaunch}
-        title="Gerar lançamento do mês"
+        title="Confirmar Lançamento"
         onClose={() => {
           if (launching) return
           setOpenLaunch(false)
         }}
       >
-        <div className="text-sm text-slate-300">
-          Isto vai criar uma venda interna paga com os itens de excedente do mês selecionado.
-        </div>
+        <div className="grid gap-3 text-sm">
+          <div className="text-slate-200">Impressora: <span className="font-semibold text-white">{launchRow?.serial_number || '-'}</span></div>
+          <div className="text-slate-200">Período: <span className="font-semibold text-white">{launchRow?.month_year || `${String(month).padStart(2, '0')}/${year}`}</span></div>
+          <div className="text-slate-200">Cópias a faturar: <span className="font-semibold text-white">{launchRow?.copies_new ?? 0}</span></div>
 
-        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm">
-          <div className="text-slate-200">
-            Período: <span className="font-semibold text-white">{String(month).padStart(2, '0')}/{year}</span>
+          <div className="h-px bg-slate-800" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <div className="text-xs font-semibold text-slate-400">Valor por Cópia (MT)</div>
+              <input
+                value={pricePerCopy}
+                onChange={(e) => setPricePerCopy(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                inputMode="decimal"
+                type="text"
+              />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-slate-400">Custo por Cópia (MT)</div>
+              <input
+                value={costPerCopy}
+                onChange={(e) => setCostPerCopy(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                inputMode="decimal"
+                type="text"
+              />
+            </div>
           </div>
-          <div className="mt-1 text-slate-200">
-            Total estimado: <span className="font-semibold text-white">{money(billing?.total_excess_amount ?? 0)}</span>
-          </div>
-        </div>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            disabled={launching}
-            onClick={() => setOpenLaunch(false)}
-            className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            disabled={launching}
-            onClick={async () => {
-              setLaunching(true)
-              try {
-                const res = await generatePrintersBillingLaunch({ year, month, establishment_id: effectiveEstId })
-                toast.success(`Lançamento criado. Venda #${res?.sale_id || ''}`)
-                setOpenLaunch(false)
-              } catch (err) {
-                const msg = err?.response?.data?.detail || 'Não foi possível gerar o lançamento.'
-                toast.error(msg)
-              } finally {
-                setLaunching(false)
-              }
-            }}
-            className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {launching ? 'Gerando...' : 'Confirmar'}
-          </button>
+          <div className="text-base font-semibold text-brand-400">Valor Total: MT {launchTotal}</div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              disabled={launching}
+              onClick={() => setOpenLaunch(false)}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={launching || Number(launchRow?.copies_new || 0) <= 0}
+              onClick={async () => {
+                if (!launchRow?.printer_id) return
+                setLaunching(true)
+                try {
+                  const res = await generatePdv3PrintersBillingLaunch({
+                    printer_id: Number(launchRow.printer_id),
+                    year,
+                    month,
+                    establishment_id: effectiveEstId,
+                    price_per_copy: numberOnly(pricePerCopy),
+                    cost_per_copy: numberOnly(costPerCopy),
+                  })
+                  toast.success(`Lançamento criado. Venda #${res?.sale_id || ''}`)
+                  setOpenLaunch(false)
+                  await load()
+                } catch (err) {
+                  const msg = err?.response?.data?.detail || 'Não foi possível gerar o lançamento.'
+                  toast.error(msg)
+                } finally {
+                  setLaunching(false)
+                }
+              }}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {launching ? 'Gerando...' : 'Confirmar'}
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

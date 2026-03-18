@@ -1,53 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-import {
-  createPrinterReading,
-  deletePrinterReading,
-  listPrinterCounterTypes,
-  listPrinterReadings,
-  listPrinters,
-  updatePrinterReading,
-} from '../../api/printers.js'
+import { createPdv3PrinterReading, listPdv3PrinterReadings, listPrinters } from '../../api/printers.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 
-function Modal({ open, title, children, onClose }) {
-  if (!open) return null
-  return (
-    <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-            <div className="text-sm font-semibold text-white">{title}</div>
-            <button
-              onClick={onClose}
-              className="h-8 w-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-300"
-              type="button"
-              aria-label="Fechar"
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-                <path d="M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-          <div className="max-h-[80vh] overflow-y-auto p-5">{children}</div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function toIsoDatetimeLocal(d) {
-  if (!d) return ''
-  const pad = (n) => String(n).padStart(2, '0')
-  const yyyy = d.getFullYear()
-  const mm = pad(d.getMonth() + 1)
-  const dd = pad(d.getDate())
-  const hh = pad(d.getHours())
-  const mi = pad(d.getMinutes())
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+function fmtDate(v) {
+  if (!v) return ''
+  try {
+    const d = new Date(v)
+    if (Number.isNaN(d.getTime())) return String(v)
+    return d.toISOString().slice(0, 10)
+  } catch {
+    return String(v)
+  }
 }
 
 export default function ReprographyReadingsPage() {
@@ -55,6 +21,7 @@ export default function ReprographyReadingsPage() {
   const branch = useAuthStore((s) => s.branch)
   const establishment = useAuthStore((s) => s.establishment)
   const contextVersion = useAuthStore((s) => s.contextVersion)
+  const navigate = useNavigate()
 
   const role = (me?.role || '').toString().trim().toLowerCase()
   const isAdmin = role === 'admin' || role === 'owner'
@@ -65,115 +32,110 @@ export default function ReprographyReadingsPage() {
   const effectiveEstId = isAdmin ? (establishment?.id || undefined) : undefined
 
   const [loading, setLoading] = useState(true)
-  const [rows, setRows] = useState([])
-
   const [printers, setPrinters] = useState([])
-  const [counterTypes, setCounterTypes] = useState([])
+  const [printerId, setPrinterId] = useState('')
+
+  const [counterValue, setCounterValue] = useState('')
+  const [readingDate, setReadingDate] = useState(() => new Date().toISOString().slice(0, 10))
+
+  const [lastReadingDate, setLastReadingDate] = useState('')
+  const [previousCounter, setPreviousCounter] = useState('')
+  const [baselineCounter, setBaselineCounter] = useState('0')
+  const [copies, setCopies] = useState('0')
+
+  const [saving, setSaving] = useState(false)
+  const [history, setHistory] = useState([])
 
   const printerById = useState(() => new Map())[0]
-  const ctypeById = useState(() => new Map())[0]
 
-  const [filterPrinterId, setFilterPrinterId] = useState('')
-  const [filterCounterTypeId, setFilterCounterTypeId] = useState('')
+  const canSave = useMemo(() => Number(printerId) > 0 && counterValue.trim() && readingDate, [printerId, counterValue, readingDate])
 
-  const [openModal, setOpenModal] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [editing, setEditing] = useState(null)
-
-  const [printerId, setPrinterId] = useState('')
-  const [counterTypeId, setCounterTypeId] = useState('')
-  const [readingDate, setReadingDate] = useState(toIsoDatetimeLocal(new Date()))
-  const [counterValue, setCounterValue] = useState('0')
-
-  const [openConfirm, setOpenConfirm] = useState(false)
-  const [confirmRow, setConfirmRow] = useState(null)
-  const [confirmBusy, setConfirmBusy] = useState(false)
-
-  const canSave = useMemo(() => Number(printerId) > 0 && Number(counterTypeId) > 0 && readingDate && counterValue !== '', [
-    printerId,
-    counterTypeId,
-    readingDate,
-    counterValue,
-  ])
-
-  function resetForm() {
-    setEditing(null)
-    setPrinterId('')
-    setCounterTypeId('')
-    setReadingDate(toIsoDatetimeLocal(new Date()))
-    setCounterValue('0')
-  }
-
-  async function loadRefs() {
+  async function loadPrinters() {
     try {
-      const [ps, cts] = await Promise.all([
-        listPrinters({ establishment_id: effectiveEstId, include_inactive: false }),
-        listPrinterCounterTypes({ establishment_id: effectiveEstId, include_inactive: false }),
-      ])
-      const prs = Array.isArray(ps) ? ps : []
-      const ctr = Array.isArray(cts) ? cts : []
-      setPrinters(prs)
-      setCounterTypes(ctr)
-
+      const data = await listPrinters({ establishment_id: effectiveEstId, include_inactive: false })
+      const rows = Array.isArray(data) ? data : []
+      setPrinters(rows)
       printerById.clear()
-      for (const p of prs) printerById.set(Number(p.id), p)
-
-      ctypeById.clear()
-      for (const c of ctr) ctypeById.set(Number(c.id), c)
+      for (const p of rows) printerById.set(Number(p.id), p)
     } catch {
       setPrinters([])
-      setCounterTypes([])
       printerById.clear()
-      ctypeById.clear()
     }
   }
 
-  async function load() {
-    if (!isReprography) {
-      setRows([])
-      setLoading(false)
+  async function loadHistory(selectedPrinterId) {
+    if (!selectedPrinterId) {
+      setHistory([])
+      return []
+    }
+    try {
+      const data = await listPdv3PrinterReadings({ establishment_id: effectiveEstId, printer_id: Number(selectedPrinterId), limit: 20, offset: 0 })
+      const rows = Array.isArray(data) ? data : []
+      setHistory(rows)
+      return rows
+    } catch {
+      setHistory([])
+      return []
+    }
+  }
+
+  function recomputeCopies(nextCounterValue, prevCounterValue) {
+    try {
+      const a = Number(nextCounterValue)
+      const b = Number(prevCounterValue)
+      if (!Number.isFinite(a) || !Number.isFinite(b)) {
+        setCopies('0')
+        return
+      }
+      setCopies(String(Math.max(0, Math.trunc(a) - Math.trunc(b))))
+    } catch {
+      setCopies('0')
+    }
+  }
+
+  async function onSelectPrinter(nextPrinterId) {
+    setPrinterId(nextPrinterId)
+    setCounterValue('')
+    setCopies('0')
+
+    if (!nextPrinterId) {
+      setLastReadingDate('')
+      setPreviousCounter('')
+      setBaselineCounter('0')
+      setHistory([])
       return
     }
 
-    setLoading(true)
-    try {
-      const data = await listPrinterReadings({
-        establishment_id: effectiveEstId,
-        printer_id: filterPrinterId ? Number(filterPrinterId) : undefined,
-        counter_type_id: filterCounterTypeId ? Number(filterCounterTypeId) : undefined,
-        limit: 200,
-        offset: 0,
-      })
-      setRows(Array.isArray(data) ? data : [])
-    } catch (err) {
-      const msg = err?.response?.data?.detail || 'Não foi possível carregar leituras.'
-      toast.error(msg)
-      setRows([])
-    } finally {
-      setLoading(false)
+    const p = printerById.get(Number(nextPrinterId))
+    const base = String(p?.initial_counter ?? 0)
+    setBaselineCounter(base)
+
+    const rows = await loadHistory(nextPrinterId)
+    const last = rows?.[0]
+    if (last?.reading_date) {
+      setLastReadingDate(fmtDate(last.reading_date))
+      setPreviousCounter(String(last.counter_value ?? '0'))
+      return
     }
+
+    setLastReadingDate('Nenhuma')
+    setPreviousCounter(base)
   }
 
   useEffect(() => {
-    loadRefs()
-    load()
+    ;(async () => {
+      if (!isReprography) return
+      setLoading(true)
+      await loadPrinters()
+      setLoading(false)
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextVersion, branch?.id, establishment?.id, filterPrinterId, filterCounterTypeId])
+  }, [contextVersion, branch?.id, establishment?.id])
 
-  function openCreate() {
-    resetForm()
-    setOpenModal(true)
-  }
-
-  function openEdit(row) {
-    setEditing(row)
-    setPrinterId(row?.printer_id ? String(row.printer_id) : '')
-    setCounterTypeId(row?.counter_type_id ? String(row.counter_type_id) : '')
-    const d = row?.reading_date ? new Date(row.reading_date) : new Date()
-    setReadingDate(toIsoDatetimeLocal(d))
-    setCounterValue(String(row?.counter_value ?? 0))
-    setOpenModal(true)
-  }
+  useEffect(() => {
+    recomputeCopies(counterValue, previousCounter)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [counterValue, previousCounter])
 
   async function onSubmit(e) {
     e?.preventDefault?.()
@@ -181,65 +143,44 @@ export default function ReprographyReadingsPage() {
     if (!canSave) return
 
     const cv = Number(counterValue)
+    const prev = Number(previousCounter)
     if (!Number.isFinite(cv) || cv < 0) {
-      toast.error('Contador inválido.')
+      toast.error('Informe o contador atual!')
       return
     }
-
-    const dt = new Date(readingDate)
-    if (Number.isNaN(dt.getTime())) {
-      toast.error('Data inválida.')
+    if (Number.isFinite(prev) && cv < prev) {
+      toast.error('Contador atual não pode ser menor que o contador anterior!')
+      return
+    }
+    if (!readingDate) {
+      toast.error('Informe a data da leitura!')
       return
     }
 
     setSaving(true)
     try {
+      const dt = new Date(`${readingDate}T00:00:00`)
       const payload = {
         printer_id: Number(printerId),
-        counter_type_id: Number(counterTypeId),
         reading_date: dt.toISOString(),
         counter_value: Math.trunc(cv),
+        establishment_id: effectiveEstId ?? null,
       }
-      if (isAdmin) payload.establishment_id = effectiveEstId ?? null
+      await createPdv3PrinterReading(payload)
+      toast.success('Leitura registrada com sucesso!')
 
-      if (editing?.id) {
-        await updatePrinterReading(editing.id, payload)
-        toast.success('Leitura atualizada.')
-      } else {
-        await createPrinterReading(payload)
-        toast.success('Leitura criada.')
-      }
-
-      setOpenModal(false)
-      resetForm()
-      await load()
+      // reload history and update previous counter
+      const rows = await loadHistory(printerId)
+      const last = rows?.[0]
+      setLastReadingDate(last?.reading_date ? fmtDate(last.reading_date) : '')
+      setPreviousCounter(String(last?.counter_value ?? cv))
+      setCounterValue('')
+      setCopies('0')
     } catch (err) {
-      const msg = err?.response?.data?.detail || 'Não foi possível salvar agora.'
+      const msg = err?.response?.data?.detail || 'Erro ao salvar leitura.'
       toast.error(msg)
     } finally {
       setSaving(false)
-    }
-  }
-
-  function requestDelete(row) {
-    setConfirmRow(row)
-    setOpenConfirm(true)
-  }
-
-  async function confirmDelete() {
-    if (!confirmRow?.id) return
-    setConfirmBusy(true)
-    try {
-      await deletePrinterReading(confirmRow.id)
-      toast.success('Leitura removida.')
-      setOpenConfirm(false)
-      setConfirmRow(null)
-      await load()
-    } catch (err) {
-      const msg = err?.response?.data?.detail || 'Não foi possível remover agora.'
-      toast.error(msg)
-    } finally {
-      setConfirmBusy(false)
     }
   }
 
@@ -255,240 +196,151 @@ export default function ReprographyReadingsPage() {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <div className="text-lg sm:text-xl font-semibold">Reprografia · Leituras</div>
-          <div className="mt-1 text-sm text-slate-300">Registrar leituras por máquina e tipo.</div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={filterPrinterId}
-            onChange={(e) => setFilterPrinterId(e.target.value)}
-            className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100"
-          >
-            <option value="">Todas as máquinas</option>
-            {(printers || []).map((p) => (
-              <option key={p.id} value={String(p.id)}>
-                {p.serial_number}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={filterCounterTypeId}
-            onChange={(e) => setFilterCounterTypeId(e.target.value)}
-            className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100"
-          >
-            <option value="">Todos os tipos</option>
-            {(counterTypes || []).map((c) => (
-              <option key={c.id} value={String(c.id)}>
-                {c.name} ({c.code})
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            onClick={load}
-            className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
-          >
-            Atualizar
-          </button>
-
-          <button
-            type="button"
-            onClick={openCreate}
-            disabled={!isAdmin}
-            className="rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-60 px-4 py-2.5 text-sm font-semibold text-white"
-          >
-            Nova leitura
-          </button>
+          <div className="text-lg sm:text-xl font-semibold">Registrar Leituras</div>
+          <div className="mt-1 text-sm text-slate-300">Registro de leituras de impressoras.</div>
         </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-        <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
-          <div className="col-span-4">Máquina</div>
-          <div className="col-span-3">Tipo</div>
-          <div className="col-span-3">Data</div>
-          <div className="col-span-1">Contador</div>
-          <div className="col-span-1 text-right">Ações</div>
-        </div>
+      <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+        <div className="text-xl font-semibold">Registro de Leituras de Impressoras</div>
+        <div className="mt-1 text-sm text-slate-300">Nova Leitura</div>
 
-        {loading ? (
-          <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
-        ) : rows.length ? (
-          <div className="divide-y divide-slate-800">
-            {rows.map((r) => {
-              const p = printerById.get(Number(r.printer_id))
-              const c = ctypeById.get(Number(r.counter_type_id))
-              const d = r.reading_date ? new Date(r.reading_date) : null
-              return (
-                <div key={r.id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm">
-                  <div className="col-span-4 font-semibold text-slate-100">{p?.serial_number || `#${r.printer_id}`}</div>
-                  <div className="col-span-3 text-slate-300">{c?.name || c?.code || `#${r.counter_type_id}`}</div>
-                  <div className="col-span-3 text-slate-300">{d ? d.toLocaleString('pt-PT') : '-'}</div>
-                  <div className="col-span-1 text-slate-300">{r.counter_value ?? 0}</div>
-                  <div className="col-span-1 flex justify-end gap-2">
-                    <button
-                      type="button"
-                      disabled={!isAdmin}
-                      className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100 disabled:opacity-60"
-                      onClick={() => openEdit(r)}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!isAdmin}
-                      className="rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-1 text-xs text-rose-200 disabled:opacity-60"
-                      onClick={() => requestDelete(r)}
-                    >
-                      Apagar
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="px-4 py-6 text-sm text-slate-300">Nenhuma leitura cadastrada.</div>
-        )}
-      </div>
+        <form className="mt-4 grid gap-4" onSubmit={onSubmit}>
+          {!isAdmin ? <div className="text-sm text-amber-300">Sem permissão para registrar leituras.</div> : null}
 
-      <Modal
-        open={openModal}
-        title={editing?.id ? 'Editar leitura' : 'Nova leitura'}
-        onClose={() => {
-          if (saving) return
-          setOpenModal(false)
-          resetForm()
-        }}
-      >
-        <form className="grid gap-4" onSubmit={onSubmit}>
-          {!isAdmin ? <div className="text-sm text-amber-300">Sem permissão para gerir leituras.</div> : null}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="grid gap-2">
-              <div className="text-sm font-medium text-slate-200">Máquina</div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+            <div className="lg:col-span-6">
+              <div className="text-xs font-semibold text-slate-400">Impressora *</div>
               <select
                 value={printerId}
-                onChange={(e) => setPrinterId(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100"
-                disabled={!isAdmin || saving}
-                required
+                onChange={async (e) => {
+                  await onSelectPrinter(e.target.value)
+                }}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                disabled={loading}
               >
                 <option value="">Selecione...</option>
                 {(printers || []).map((p) => (
                   <option key={p.id} value={String(p.id)}>
-                    {p.serial_number}
+                    {p.serial_number} - {p.brand || ''} {p.model || ''}
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
 
-            <label className="grid gap-2">
-              <div className="text-sm font-medium text-slate-200">Tipo</div>
-              <select
-                value={counterTypeId}
-                onChange={(e) => setCounterTypeId(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100"
-                disabled={!isAdmin || saving}
-                required
-              >
-                <option value="">Selecione...</option>
-                {(counterTypes || []).map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.name} ({c.code})
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="grid gap-2">
-              <div className="text-sm font-medium text-slate-200">Data</div>
-              <input
-                value={readingDate}
-                onChange={(e) => setReadingDate(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100"
-                type="datetime-local"
-                disabled={!isAdmin || saving}
-                required
-              />
-            </label>
-
-            <label className="grid gap-2">
-              <div className="text-sm font-medium text-slate-200">Contador</div>
+            <div className="lg:col-span-3">
+              <div className="text-xs font-semibold text-slate-400">Contador Atual *</div>
               <input
                 value={counterValue}
                 onChange={(e) => setCounterValue(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100"
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                 inputMode="numeric"
                 type="text"
-                disabled={!isAdmin || saving}
-                required
+                disabled={!isAdmin || saving || !printerId}
               />
-            </label>
+            </div>
+
+            <div className="lg:col-span-3">
+              <div className="text-xs font-semibold text-slate-400">Data da Leitura *</div>
+              <input
+                value={readingDate}
+                onChange={(e) => setReadingDate(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                type="date"
+                disabled={!isAdmin || saving}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setOpenModal(false)
-                resetForm()
-              }}
-              disabled={saving}
-              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
-            >
-              Cancelar
-            </button>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <div className="text-sm font-semibold">Informações da Última Leitura:</div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm">Última: {lastReadingDate || '-'}</div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm">Anterior: {previousCounter || '-'}</div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm">Cópias: {copies || '0'}</div>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
             <button
               type="submit"
               disabled={!isAdmin || saving || !canSave}
-              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-60 px-4 py-2.5 text-sm font-semibold text-white"
             >
               {saving ? 'Salvando...' : 'Salvar'}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPrinterId('')
+                setCounterValue('')
+                setReadingDate(new Date().toISOString().slice(0, 10))
+                setLastReadingDate('')
+                setPreviousCounter('')
+                setCopies('0')
+                setHistory([])
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/reprography/billing')}
+              className="rounded-xl bg-emerald-700 hover:bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              Faturamento
+            </button>
           </div>
         </form>
-      </Modal>
+      </div>
 
-      <Modal
-        open={openConfirm}
-        title="Apagar leitura"
-        onClose={() => {
-          if (confirmBusy) return
-          setOpenConfirm(false)
-          setConfirmRow(null)
-        }}
-      >
-        <div className="grid gap-4">
-          <div className="text-sm text-slate-200">Tem certeza que deseja apagar esta leitura?</div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              disabled={confirmBusy}
-              onClick={() => {
-                setOpenConfirm(false)
-                setConfirmRow(null)
-              }}
-              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
-            >
-              Voltar
-            </button>
-            <button
-              type="button"
-              disabled={confirmBusy}
-              onClick={confirmDelete}
-              className="rounded-xl border border-rose-900/60 bg-rose-950/50 hover:bg-rose-950 px-4 py-2.5 text-sm font-semibold text-rose-100 disabled:opacity-60"
-            >
-              {confirmBusy ? 'Apagando...' : 'Apagar'}
-            </button>
-          </div>
+      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+        <div className="px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">Histórico de Leituras</div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-slate-400">
+                <th className="py-2 px-4">Data</th>
+                <th className="py-2 px-4">Contador Anterior</th>
+                <th className="py-2 px-4">Contador Atual</th>
+                <th className="py-2 px-4">Cópias</th>
+                <th className="py-2 px-4">Registrado em</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!printerId ? (
+                <tr>
+                  <td className="py-3 px-4 text-slate-300" colSpan={5}>
+                    Selecione uma impressora.
+                  </td>
+                </tr>
+              ) : !history.length ? (
+                <tr>
+                  <td className="py-3 px-4 text-slate-300" colSpan={5}>
+                    Sem leituras.
+                  </td>
+                </tr>
+              ) : (
+                history.map((r, idx) => {
+                  const prev = idx + 1 < history.length ? history[idx + 1] : null
+                  const prevVal = prev ? Number(prev.counter_value || 0) : Number(baselineCounter || 0)
+                  const currVal = Number(r.counter_value || 0)
+                  const cps = Math.max(0, Math.trunc(currVal) - Math.trunc(prevVal))
+                  return (
+                    <tr key={r.id} className="border-t border-slate-800">
+                      <td className="py-2 px-4 text-slate-200">{fmtDate(r.reading_date) || '-'}</td>
+                      <td className="py-2 px-4 text-slate-200">{prevVal}</td>
+                      <td className="py-2 px-4 text-slate-200">{currVal}</td>
+                      <td className="py-2 px-4 text-slate-200">{cps}</td>
+                      <td className="py-2 px-4 text-slate-200">{r.created_at ? String(r.created_at).slice(0, 19) : ''}</td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      </Modal>
+      </div>
     </div>
   )
 }

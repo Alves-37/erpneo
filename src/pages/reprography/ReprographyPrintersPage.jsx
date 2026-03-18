@@ -1,35 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { createPrinter, deletePrinter, listPrinters, updatePrinter } from '../../api/printers.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 
-function Modal({ open, title, children, onClose }) {
-  if (!open) return null
-  return (
-    <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-            <div className="text-sm font-semibold text-white">{title}</div>
-            <button
-              onClick={onClose}
-              className="h-8 w-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-300"
-              type="button"
-              aria-label="Fechar"
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-                <path d="M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-          <div className="max-h-[80vh] overflow-y-auto p-5">{children}</div>
-        </div>
-      </div>
-    </div>
-  )
+function fmtDate(v) {
+  if (!v) return ''
+  try {
+    const d = new Date(v)
+    if (Number.isNaN(d.getTime())) return String(v)
+    return d.toISOString().slice(0, 10)
+  } catch {
+    return String(v)
+  }
 }
 
 export default function ReprographyPrintersPage() {
@@ -37,6 +21,7 @@ export default function ReprographyPrintersPage() {
   const branch = useAuthStore((s) => s.branch)
   const establishment = useAuthStore((s) => s.establishment)
   const contextVersion = useAuthStore((s) => s.contextVersion)
+  const navigate = useNavigate()
 
   const role = (me?.role || '').toString().trim().toLowerCase()
   const isAdmin = role === 'admin' || role === 'owner'
@@ -47,13 +32,14 @@ export default function ReprographyPrintersPage() {
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState([])
 
-  const [openModal, setOpenModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(null)
 
   const [serialNumber, setSerialNumber] = useState('')
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
+  const [initialCounter, setInitialCounter] = useState('0')
+  const [installationDate, setInstallationDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [isActive, setIsActive] = useState(true)
 
   const [openConfirm, setOpenConfirm] = useState(false)
@@ -69,6 +55,8 @@ export default function ReprographyPrintersPage() {
     setSerialNumber('')
     setBrand('')
     setModel('')
+    setInitialCounter('0')
+    setInstallationDate(new Date().toISOString().slice(0, 10))
     setIsActive(true)
   }
 
@@ -97,18 +85,14 @@ export default function ReprographyPrintersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextVersion, branch?.id, establishment?.id])
 
-  function openCreate() {
-    resetForm()
-    setOpenModal(true)
-  }
-
   function openEdit(row) {
     setEditing(row)
     setSerialNumber(row?.serial_number || '')
     setBrand(row?.brand || '')
     setModel(row?.model || '')
+    setInitialCounter(String(row?.initial_counter ?? 0))
+    setInstallationDate(fmtDate(row?.installation_date) || new Date().toISOString().slice(0, 10))
     setIsActive(row?.is_active ?? true)
-    setOpenModal(true)
   }
 
   async function onSubmit(e) {
@@ -122,6 +106,8 @@ export default function ReprographyPrintersPage() {
         serial_number: serialNumber.trim(),
         brand: brand.trim() || null,
         model: model.trim() || null,
+        initial_counter: Math.trunc(Number(initialCounter) || 0),
+        installation_date: installationDate || null,
         is_active: Boolean(isActive),
       }
       if (isAdmin) payload.establishment_id = effectiveEstId ?? null
@@ -133,7 +119,6 @@ export default function ReprographyPrintersPage() {
         await createPrinter(payload)
         toast.success('Impressora criada.')
       }
-      setOpenModal(false)
       resetForm()
       await load()
     } catch (err) {
@@ -154,7 +139,7 @@ export default function ReprographyPrintersPage() {
     setConfirmBusy(true)
     try {
       await deletePrinter(confirmRow.id)
-      toast.success('Impressora removida.')
+      toast.success('Impressora inativada.')
       setOpenConfirm(false)
       setConfirmRow(null)
       await load()
@@ -178,8 +163,8 @@ export default function ReprographyPrintersPage() {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <div className="text-lg sm:text-xl font-semibold">Reprografia · Máquinas</div>
-          <div className="mt-1 text-sm text-slate-300">Cadastro de impressoras (máquinas).</div>
+          <div className="text-lg sm:text-xl font-semibold">Cadastro de Impressoras</div>
+          <div className="mt-1 text-sm text-slate-300">Cadastre e gerencie as impressoras.</div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -190,23 +175,114 @@ export default function ReprographyPrintersPage() {
           >
             Atualizar
           </button>
-          <button
-            type="button"
-            onClick={openCreate}
-            disabled={!isAdmin}
-            className="rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-60 px-4 py-2.5 text-sm font-semibold text-white"
-            title={!isAdmin ? 'Sem permissão' : ''}
-          >
-            Nova máquina
-          </button>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+        {!isAdmin ? <div className="text-sm text-amber-300">Sem permissão para cadastrar impressoras.</div> : null}
+
+        <form className="grid gap-3" onSubmit={onSubmit}>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+            <div className="lg:col-span-4">
+              <div className="text-xs font-semibold text-slate-400">Número de Série *</div>
+              <input
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                disabled={!isAdmin || saving}
+                placeholder="Número de Série"
+                required
+              />
+            </div>
+            <div className="lg:col-span-3">
+              <div className="text-xs font-semibold text-slate-400">Marca</div>
+              <input
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                disabled={!isAdmin || saving}
+              />
+            </div>
+            <div className="lg:col-span-3">
+              <div className="text-xs font-semibold text-slate-400">Modelo</div>
+              <input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                disabled={!isAdmin || saving}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <div className="text-xs font-semibold text-slate-400">Contador Inicial</div>
+              <input
+                value={initialCounter}
+                onChange={(e) => setInitialCounter(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                inputMode="numeric"
+                type="text"
+                disabled={!isAdmin || saving}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+            <div className="lg:col-span-3">
+              <div className="text-xs font-semibold text-slate-400">Data Instalação *</div>
+              <input
+                value={installationDate}
+                onChange={(e) => setInstallationDate(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                type="date"
+                disabled={!isAdmin || saving}
+                required
+              />
+            </div>
+            <div className="lg:col-span-3">
+              <label className="mt-6 inline-flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+                  disabled={!isAdmin || saving}
+                />
+                Ativa
+              </label>
+            </div>
+            <div className="lg:col-span-6 flex flex-wrap gap-2 justify-end">
+              <button
+                type="submit"
+                disabled={!isAdmin || saving || !canSave}
+                className="rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-60 px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                {saving ? 'Salvando...' : 'Salvar'}
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={saving}
+                className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
+              >
+                Limpar
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/reprography/readings')}
+                className="rounded-xl bg-emerald-700 hover:bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                Registrar Leitura
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
         <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-slate-400 border-b border-slate-800">
-          <div className="col-span-5">Número de série</div>
-          <div className="col-span-3">Marca</div>
-          <div className="col-span-2">Modelo</div>
+          <div className="col-span-3">Número de Série</div>
+          <div className="col-span-3">Marca/Modelo</div>
+          <div className="col-span-2">Contador</div>
+          <div className="col-span-2">Instalação</div>
           <div className="col-span-1">Status</div>
           <div className="col-span-1 text-right">Ações</div>
         </div>
@@ -217,9 +293,10 @@ export default function ReprographyPrintersPage() {
           <div className="divide-y divide-slate-800">
             {rows.map((r) => (
               <div key={r.id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm">
-                <div className="col-span-5 font-semibold text-slate-100">{r.serial_number}</div>
-                <div className="col-span-3 text-slate-300">{r.brand || '-'}</div>
-                <div className="col-span-2 text-slate-300">{r.model || '-'}</div>
+                <div className="col-span-3 font-semibold text-slate-100">{r.serial_number}</div>
+                <div className="col-span-3 text-slate-300">{`${r.brand || ''} ${r.model || ''}`.trim() || '-'}</div>
+                <div className="col-span-2 text-slate-300">{r.initial_counter ?? 0}</div>
+                <div className="col-span-2 text-slate-300">{fmtDate(r.installation_date) || '-'}</div>
                 <div className="col-span-1 text-slate-300">{r.is_active ? 'Ativa' : 'Inativa'}</div>
                 <div className="col-span-1 flex justify-end gap-2">
                   <button
@@ -236,7 +313,7 @@ export default function ReprographyPrintersPage() {
                     className="rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-1 text-xs text-rose-200 disabled:opacity-60"
                     onClick={() => requestDelete(r)}
                   >
-                    Apagar
+                    Inativar
                   </button>
                 </div>
               </div>
@@ -247,124 +324,55 @@ export default function ReprographyPrintersPage() {
         )}
       </div>
 
-      <Modal
-        open={openModal}
-        title={editing?.id ? 'Editar máquina' : 'Nova máquina'}
-        onClose={() => {
-          if (saving) return
-          setOpenModal(false)
-          resetForm()
-        }}
-      >
-        <form className="grid gap-4" onSubmit={onSubmit}>
-          {!isAdmin ? <div className="text-sm text-amber-300">Sem permissão para cadastrar máquinas.</div> : null}
-
-          <label className="grid gap-2">
-            <div className="text-sm font-medium text-slate-200">Número de série</div>
-            <input
-              value={serialNumber}
-              onChange={(e) => setSerialNumber(e.target.value)}
-              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
-              placeholder="Ex: SN-001"
-              disabled={!isAdmin || saving}
-              required
-            />
-          </label>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="grid gap-2">
-              <div className="text-sm font-medium text-slate-200">Marca</div>
-              <input
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                placeholder="Ex: Canon"
-                disabled={!isAdmin || saving}
-              />
-            </label>
-
-            <label className="grid gap-2">
-              <div className="text-sm font-medium text-slate-200">Modelo</div>
-              <input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                placeholder="Ex: iR 2625"
-                disabled={!isAdmin || saving}
-              />
-            </label>
-          </div>
-
-          <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-            <input
-              type="checkbox"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
-              disabled={!isAdmin || saving}
-            />
-            Ativa
-          </label>
-
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setOpenModal(false)
-                resetForm()
-              }}
-              disabled={saving}
-              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={!isAdmin || saving || !canSave}
-              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {saving ? 'Salvando...' : 'Salvar'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
-        open={openConfirm}
-        title="Apagar máquina"
-        onClose={() => {
-          if (confirmBusy) return
-          setOpenConfirm(false)
-          setConfirmRow(null)
-        }}
-      >
-        <div className="grid gap-4">
-          <div className="text-sm text-slate-200">
-            Tem certeza que deseja apagar a máquina <span className="font-semibold text-white">{confirmRow?.serial_number}</span>?
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              disabled={confirmBusy}
-              onClick={() => {
-                setOpenConfirm(false)
-                setConfirmRow(null)
-              }}
-              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
-            >
-              Voltar
-            </button>
-            <button
-              type="button"
-              disabled={confirmBusy}
-              onClick={confirmDelete}
-              className="rounded-xl border border-rose-900/60 bg-rose-950/50 hover:bg-rose-950 px-4 py-2.5 text-sm font-semibold text-rose-100 disabled:opacity-60"
-            >
-              {confirmBusy ? 'Apagando...' : 'Apagar'}
-            </button>
+      {openConfirm ? (
+        <div className="fixed inset-0 z-40">
+          <div className="absolute inset-0 bg-black/70" onClick={() => !confirmBusy && setOpenConfirm(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+                <div className="text-sm font-semibold text-white">Confirmar Inativação</div>
+                <button
+                  onClick={() => !confirmBusy && setOpenConfirm(false)}
+                  className="h-8 w-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-300"
+                  type="button"
+                  aria-label="Fechar"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                    <path d="M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-5">
+                <div className="text-sm text-slate-200">
+                  Deseja inativar a impressora <span className="font-semibold text-white">{confirmRow?.serial_number}</span>?
+                </div>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={confirmBusy}
+                    onClick={() => {
+                      setOpenConfirm(false)
+                      setConfirmRow(null)
+                    }}
+                    className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 disabled:opacity-60"
+                  >
+                    Não
+                  </button>
+                  <button
+                    type="button"
+                    disabled={confirmBusy}
+                    onClick={confirmDelete}
+                    className="rounded-xl bg-rose-700 hover:bg-rose-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {confirmBusy ? 'Inativando...' : 'Sim'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </Modal>
+      ) : null}
     </div>
   )
 }
