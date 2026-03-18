@@ -191,6 +191,24 @@ export default function ProductsPage() {
     return map
   }, [categories])
 
+  const serviceCategoryId = useMemo(() => {
+    const row = (categories || []).find((c) => {
+      const nm = String(c?.name || '').trim().toLowerCase()
+      return nm === 'serviços' || nm === 'servicos'
+    })
+    return row?.id ? Number(row.id) : null
+  }, [categories])
+
+  const isServiceCategorySelected = useMemo(() => {
+    if (categoryMode === 'new') {
+      const nm = String(categoryName || '').trim().toLowerCase()
+      return nm === 'serviços' || nm === 'servicos'
+    }
+    if (!categoryId) return false
+    if (!serviceCategoryId) return false
+    return Number(categoryId) === Number(serviceCategoryId)
+  }, [categoryMode, categoryId, categoryName, serviceCategoryId])
+
   async function load({ silent = false } = {}) {
     if (!silent) setLoading(true)
     try {
@@ -347,6 +365,10 @@ export default function ProductsPage() {
     setDescricao(p?.attributes?.descricao != null ? String(p.attributes.descricao) : '')
     setValidade(p?.attributes?.validade != null ? String(p.attributes.validade) : '')
 
+    if (Boolean(p?.is_service) && serviceCategoryId && categoryMode === 'select') {
+      setCategoryId(String(serviceCategoryId))
+    }
+
     setSupplierId(p?.supplier_id ? String(p.supplier_id) : '')
     setDefaultLocationId(p?.default_location_id ? String(p.default_location_id) : '')
 
@@ -367,7 +389,19 @@ export default function ProductsPage() {
     } else {
       setEstablishmentId('')
     }
+
+    setOpenCreate(true)
   }
+
+  useEffect(() => {
+    if (!isReprography) return
+    if (!isServiceCategorySelected) return
+    setIsService(true)
+    setTrackStock(false)
+    setCost('')
+    setMinStock('')
+    setStockQty('')
+  }, [isReprography, isServiceCategorySelected])
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -398,13 +432,14 @@ export default function ProductsPage() {
       return
     }
 
-    const parsedMinStock = isService ? 0 : (minStock === '' ? 0 : Number(String(minStock).replace(',', '.')))
+    const effectiveIsService = isReprography ? isServiceCategorySelected : isService
+    const parsedMinStock = effectiveIsService ? 0 : (minStock === '' ? 0 : Number(String(minStock).replace(',', '.')))
     if (!Number.isFinite(parsedMinStock) || parsedMinStock < 0) {
       toast.error('Estoque mínimo inválido.')
       return
     }
 
-    const parsedStockQty = isService ? null : (stockQty === '' ? null : Number(String(stockQty).replace(',', '.')))
+    const parsedStockQty = effectiveIsService ? null : (stockQty === '' ? null : Number(String(stockQty).replace(',', '.')))
     if (parsedStockQty !== null && (!Number.isFinite(parsedStockQty) || parsedStockQty < 0)) {
       toast.error('Estoque inválido.')
       return
@@ -418,11 +453,11 @@ export default function ProductsPage() {
       default_location_id: Number(defaultLocationId),
       unit: finalUnit,
       price: price ? Number(price) : 0,
-      cost: (isReprography && isService) ? 0 : (cost ? Number(cost) : 0),
+      cost: (isReprography && effectiveIsService) ? 0 : (cost ? Number(cost) : 0),
       tax_rate: parsedTax,
       min_stock: parsedMinStock,
-      track_stock: (isReprography && isService) ? false : trackStock,
-      is_service: isReprography ? isService : false,
+      track_stock: (isReprography && effectiveIsService) ? false : trackStock,
+      is_service: isReprography ? effectiveIsService : false,
       is_active: isActive,
       category_id: categoryMode === 'select' && categoryId ? Number(categoryId) : null,
       category_name: categoryMode === 'new' ? categoryName.trim() : null,
@@ -436,7 +471,7 @@ export default function ProductsPage() {
 
     if (isAdmin && establishmentId) payload.establishment_id = Number(establishmentId)
 
-    if (!(isReprography && isService) && parsedStockQty !== null) payload.stock_qty = parsedStockQty
+    if (!(isReprography && effectiveIsService) && parsedStockQty !== null) payload.stock_qty = parsedStockQty
 
     setCreating(true)
     try {
@@ -469,21 +504,6 @@ export default function ProductsPage() {
     } finally {
       setCreating(false)
     }
-  }
-
-  async function onToggleActive(p) {
-    try {
-      await updateProduct(p.id, { is_active: !p.is_active })
-      toast.success(!p.is_active ? 'Produto ativado.' : 'Produto desativado.')
-      await load()
-    } catch {
-      toast.error('Não foi possível alterar o status agora.')
-    }
-  }
-
-  async function onDelete(p) {
-    setDeletingProduct(p)
-    setOpenDeleteConfirm(true)
   }
 
   return (
@@ -755,14 +775,13 @@ export default function ProductsPage() {
                   <div className="col-span-3 flex justify-end gap-2">
                     <button
                       type="button"
-                      className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
                       onClick={() => setDetailsProduct(p)}
+                      className="w-full rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
                     >
                       Detalhes
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
                       onClick={() => {
                         resetForm()
                         loadCategories(businessType)
@@ -770,20 +789,21 @@ export default function ProductsPage() {
                         fillFormFromProduct(p)
                         setOpenCreate(true)
                       }}
+                      className="w-full rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
                     >
                       Editar
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
                       onClick={() => onToggleActive(p)}
+                      className="w-full rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2.5 py-1 text-xs text-slate-100"
                     >
                       {p.is_active ? 'Desativar' : 'Ativar'}
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-1 text-xs text-rose-200"
                       onClick={() => onDelete(p)}
+                      className="w-full rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-1 text-xs text-rose-200"
                     >
                       Apagar
                     </button>
@@ -925,24 +945,9 @@ export default function ProductsPage() {
       >
         <form className="grid gap-4" onSubmit={onSubmit}>
           {isReprography ? (
-            <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={isService}
-                onChange={(e) => {
-                  const v = e.target.checked
-                  setIsService(v)
-                  if (v) {
-                    setTrackStock(false)
-                    setMinStock('')
-                    setStockQty('')
-                    setCost('')
-                  }
-                }}
-                className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
-              />
-              É serviço (sem stock e sem custo)
-            </label>
+            <div className="text-xs text-slate-400">
+              Produtos na categoria <span className="font-semibold text-slate-200">Serviços</span> são tratados como serviços (sem stock e sem custo).
+            </div>
           ) : null}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1151,57 +1156,59 @@ export default function ProductsPage() {
                 />
               </label>
 
-              <label className="grid gap-2">
-                <div className="text-sm font-medium text-slate-200">Custo</div>
+              {!(isReprography && isServiceCategorySelected) ? (
+                <label className="grid gap-2">
+                  <div className="text-sm font-medium text-slate-200">Custo</div>
+                  <input
+                    value={cost}
+                    onChange={(e) => setCost(e.target.value)}
+                    className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                    placeholder="0.00"
+                    {...numericProps()}
+                  />
+                </label>
+              ) : null}
+            </div>
+          </div>
+
+          {!(isReprography && isServiceCategorySelected) ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold text-slate-400">Estoque</div>
                 <input
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                  className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                  placeholder="0.00"
+                  value={stockQty}
+                  onChange={(e) => setStockQty(e.target.value)}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                  placeholder="Ex: 10"
                   {...numericProps()}
-                  disabled={isReprography && isService}
                 />
-              </label>
-            </div>
-          </div>
+              </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="grid gap-2">
-              <div className="text-xs font-semibold text-slate-400">Estoque</div>
-              <input
-                value={stockQty}
-                onChange={(e) => setStockQty(e.target.value)}
-                className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                placeholder="Ex: 10"
-                {...numericProps()}
-                disabled={isReprography && isService}
-              />
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold text-slate-400">Estoque mínimo</div>
+                <input
+                  value={minStock}
+                  onChange={(e) => setMinStock(e.target.value)}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                  placeholder="Ex: 2"
+                  {...numericProps()}
+                />
+              </div>
             </div>
-
-            <div className="grid gap-2">
-              <div className="text-xs font-semibold text-slate-400">Estoque mínimo</div>
-              <input
-                value={minStock}
-                onChange={(e) => setMinStock(e.target.value)}
-                className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                placeholder="Ex: 2"
-                {...numericProps()}
-                disabled={isReprography && isService}
-              />
-            </div>
-          </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-6">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={trackStock}
-                onChange={(e) => setTrackStock(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
-                disabled={isReprography && isService}
-              />
-              Controla estoque
-            </label>
+            {!(isReprography && isServiceCategorySelected) ? (
+              <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={trackStock}
+                  onChange={(e) => setTrackStock(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+                />
+                Controla estoque
+              </label>
+            ) : null}
 
             <label className="inline-flex items-center gap-2 text-sm text-slate-200">
               <input
