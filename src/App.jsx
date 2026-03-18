@@ -21,6 +21,7 @@ import ReportsPage from './pages/reports/ReportsPage.jsx'
 import SettingsPage from './pages/settings/SettingsPage.jsx'
 import UsersPage from './pages/users/UsersPage.jsx'
 import EstablishmentsPage from './pages/establishments/EstablishmentsPage.jsx'
+import ReprographyBillingPage from './pages/reprography/ReprographyBillingPage.jsx'
 import AuthLayout from './layouts/AuthLayout.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import { useAuthStore } from './store/authStore.js'
@@ -111,6 +112,7 @@ function App() {
               </RestaurantOnlyRoute>
             }
           />
+          <Route path="/reprography/billing" element={<ReprographyBillingPage />} />
           <Route path="/finance" element={<FinancePage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

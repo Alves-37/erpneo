@@ -9,17 +9,19 @@ export async function listProductCategories({ businessType } = {}) {
   return res.data
 }
 
-export async function createProductCategory({ name, businessType } = {}) {
+export async function createProductCategory({ name, businessType, color } = {}) {
   const res = await apiClient.post('/product-categories', {
     name,
     business_type: businessType || undefined,
+    color,
   })
   return res.data
 }
 
-export async function updateProductCategory(categoryId, { name } = {}) {
+export async function updateProductCategory(categoryId, { name, color } = {}) {
   const res = await apiClient.put(`/product-categories/${categoryId}`, {
     name,
+    color,
   })
   return res.data
 }

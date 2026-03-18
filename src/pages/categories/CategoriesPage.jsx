@@ -50,6 +50,7 @@ export default function CategoriesPage() {
   const [openModal, setOpenModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [name, setName] = useState('')
+  const [color, setColor] = useState('')
   const [saving, setSaving] = useState(false)
 
   const canSave = useMemo(() => name.trim().length > 0, [name])
@@ -81,6 +82,7 @@ export default function CategoriesPage() {
   function resetForm() {
     setEditing(null)
     setName('')
+    setColor('')
   }
 
   async function onSubmit(e) {
@@ -91,10 +93,10 @@ export default function CategoriesPage() {
     setSaving(true)
     try {
       if (editing?.id) {
-        await updateProductCategory(editing.id, { name: name.trim() })
+        await updateProductCategory(editing.id, { name: name.trim(), color: color || null })
         toast.success('Categoria atualizada.')
       } else {
-        await createProductCategory({ name: name.trim(), businessType })
+        await createProductCategory({ name: name.trim(), businessType, color: color || null })
         toast.success('Categoria criada.')
       }
       setOpenModal(false)
@@ -166,8 +168,15 @@ export default function CategoriesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               {(items || []).map((c) => (
                 <div key={c.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <div className="text-sm font-semibold text-white truncate" title={c.name}>
-                    {c.name}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="h-3.5 w-3.5 rounded-full border border-slate-700"
+                      style={{ backgroundColor: c?.color || '#0f172a' }}
+                      title={c?.color || ''}
+                    />
+                    <div className="text-sm font-semibold text-white truncate" title={c.name}>
+                      {c.name}
+                    </div>
                   </div>
                   <div className="mt-1 text-xs text-slate-400">Tipo: {c.business_type}</div>
 
@@ -178,6 +187,7 @@ export default function CategoriesPage() {
                       onClick={() => {
                         setEditing(c)
                         setName(c.name || '')
+                        setColor(c?.color || '')
                         setOpenModal(true)
                       }}
                       className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 px-3 py-2 text-xs text-slate-100"
@@ -218,10 +228,28 @@ export default function CategoriesPage() {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100"
+              className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
               placeholder="Ex: Medicamentos"
               disabled={!isAdmin || saving}
             />
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold text-slate-400">Cor</div>
+            <div className="mt-2 flex items-center gap-3">
+              <input
+                type="color"
+                value={color || '#0f172a'}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-10 w-14 rounded-lg border border-slate-800 bg-slate-950 p-1"
+              />
+              <input
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="flex-1 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                placeholder="#3b82f6"
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-2">

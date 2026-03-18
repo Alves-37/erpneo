@@ -10,6 +10,7 @@ const nav = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/products', label: 'Produtos' },
   { to: '/categories', label: 'Categorias', pharmacyOnly: true },
+  { to: '/reprography/billing', label: 'Faturamento (Repro)', reprographyOnly: true },
   { to: '/warehouse', label: 'Armazém' },
   { to: '/stock/transfer', label: 'Transferência de Stock' },
   { to: '/stock/adjust', label: 'Ajuste de Stock' },
@@ -74,6 +75,7 @@ export default function DashboardLayout() {
   const isRestaurant = bt === 'restaurant'
   const isBar = bt === 'bar'
   const isPharmacy = bt === 'pharmacy'
+  const isReprography = bt === 'reprography' || bt === 'reprografia'
 
   useEffect(() => {
     let mounted = true
@@ -147,6 +149,7 @@ export default function DashboardLayout() {
             {nav
               .filter((item) => !item.restaurantOnly || isRestaurant)
               .filter((item) => !item.pharmacyOnly || isPharmacy)
+              .filter((item) => !item.reprographyOnly || isReprography)
               .filter((item) => !(isRestaurant && item.hideForRestaurant))
               .filter((item) => !(isBar && item.to.startsWith('/stock')))
               .filter((item) => !item.adminOnly || canSwitchBranch)
