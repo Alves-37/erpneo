@@ -1,7 +1,7 @@
 import { apiClient } from '../services/apiClient.js'
 
 export async function listPrinters({ establishment_id, include_inactive = false } = {}) {
-  const res = await apiClient.get('/printers', {
+  const res = await apiClient.get('/printers/', {
     params: {
       establishment_id: establishment_id != null ? Number(establishment_id) : undefined,
       include_inactive: include_inactive ? true : false,
@@ -11,7 +11,7 @@ export async function listPrinters({ establishment_id, include_inactive = false 
 }
 
 export async function createPrinter(payload) {
-  const res = await apiClient.post('/printers', payload)
+  const res = await apiClient.post('/printers/', payload)
   return res.data
 }
 
