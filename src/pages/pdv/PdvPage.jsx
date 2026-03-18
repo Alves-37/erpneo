@@ -724,6 +724,8 @@ export default function PdvPage() {
         customer_name: customerName,
         customer_nuit: customerNuit,
         currency: 'MZN',
+        include_tax: includeTax,
+        discount_value: Number(discount || 0),
         items: cartLines.map((l) => ({
           product_id: l.product.id,
           product_name: l.product.name,
@@ -839,6 +841,7 @@ export default function PdvPage() {
             seat_number: normalizedChannel === 'table' ? seatNum : null,
             payment_method: paymentMethod,
             include_tax: includeTax,
+            discount_value: Number(discount || 0),
             paid: effectivePaidNum,
             items: cartLines.map((l) => ({
               product_id: l.product.id,
