@@ -43,6 +43,9 @@ export default function SalesPage() {
   const establishment = useAuthStore((s) => s.establishment)
   const contextVersion = useAuthStore((s) => s.contextVersion)
 
+  const businessType = String(branch?.business_type || '').trim().toLowerCase()
+  const isRestaurant = businessType === 'restaurant'
+
   const role = (me?.role || '').toString().trim().toLowerCase()
   const isAdmin = role === 'admin' || role === 'owner'
 
@@ -122,6 +125,43 @@ export default function SalesPage() {
     }
   }, [])
 
+  const paymentMethodLabel = useMemo(() => {
+    return {
+      cash: 'Dinheiro',
+      card: 'Cartão (POS)',
+      mpesa: 'M-Pesa',
+      emola: 'e-Mola',
+      mkesh: 'mKesh',
+      transfer: 'Transferência',
+      cheque: 'Cheque',
+      other: 'Outro',
+      debt: 'Dívida (Fiado)',
+    }
+  }, [])
+
+  const fmtPaymentMethod = useMemo(() => {
+    return (value) => {
+      const k = String(value || '').trim().toLowerCase()
+      return paymentMethodLabel[k] || (value || '-')
+    }
+  }, [paymentMethodLabel])
+
+  const statusLabel = useMemo(() => {
+    return {
+      paid: 'Pago',
+      void: 'Anulado',
+      open: 'Aberto',
+      pending: 'Pendente',
+    }
+  }, [])
+
+  const fmtStatus = useMemo(() => {
+    return (value) => {
+      const k = String(value || '').trim().toLowerCase()
+      return statusLabel[k] || (value || '-')
+    }
+  }, [statusLabel])
+
   const apiBaseUrl = useMemo(() => import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app', [])
 
   useEffect(() => {
@@ -197,6 +237,17 @@ export default function SalesPage() {
     return {
       counter: 'Balcão',
       table: 'Mesa',
+      debt: 'Dívida',
+    }
+  }, [])
+
+  const saleChannelBadgeClassName = useMemo(() => {
+    return (channel) => {
+      const c = String(channel || '').trim().toLowerCase()
+      if (c === 'debt') return 'border-amber-900/60 bg-amber-950/40 text-amber-200'
+      if (c === 'table') return 'border-indigo-900/60 bg-indigo-950/40 text-indigo-200'
+      if (c === 'counter') return 'border-emerald-900/60 bg-emerald-950/40 text-emerald-200'
+      return 'border-slate-800 bg-slate-950 text-slate-200'
     }
   }, [])
 
@@ -310,30 +361,30 @@ export default function SalesPage() {
                       </div>
                       <div>
                         <div className="text-[11px] font-semibold text-slate-400">Pagamento</div>
-                        <div className="mt-1 text-sm text-slate-200 truncate">{s?.payment_method || '-'}</div>
+                        <div className="mt-1 text-sm text-slate-200 truncate">{fmtPaymentMethod(s?.payment_method)}</div>
                       </div>
                       <div>
                         <div className="text-[11px] font-semibold text-slate-400">Tipo</div>
                         <div className="mt-1">
                           <span
                             className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                              (s?.sale_channel || '').toLowerCase() === 'table'
-                                ? 'border-indigo-900/60 bg-indigo-950/40 text-indigo-200'
-                                : 'border-slate-800 bg-slate-950 text-slate-200'
+                              saleChannelBadgeClassName(s?.sale_channel)
                             }`}
                           >
                             {saleChannelLabel[(s?.sale_channel || '').toLowerCase()] || (s?.sale_channel || '-')}
                           </span>
                         </div>
                       </div>
-                      <div>
-                        <div className="text-[11px] font-semibold text-slate-400">Mesa</div>
-                        <div className="mt-1 text-sm text-slate-200 truncate">
-                          {(s?.sale_channel || '').toLowerCase() === 'table'
-                            ? `Mesa ${s?.table_number ?? '-'} · ${s?.seat_number ?? '-'}`
-                            : '-'}
+                      {isRestaurant ? (
+                        <div>
+                          <div className="text-[11px] font-semibold text-slate-400">Mesa</div>
+                          <div className="mt-1 text-sm text-slate-200 truncate">
+                            {(s?.sale_channel || '').toLowerCase() === 'table'
+                              ? `Mesa ${s?.table_number ?? '-'} · ${s?.seat_number ?? '-'}`
+                              : '-'}
+                          </div>
                         </div>
-                      </div>
+                      ) : null}
                     </div>
                   </button>
                 ))}
@@ -352,7 +403,7 @@ export default function SalesPage() {
                   <th className="px-5 py-3 text-left font-semibold">Ponto</th>
                   <th className="px-5 py-3 text-left font-semibold">Data</th>
                   <th className="px-5 py-3 text-left font-semibold">Tipo</th>
-                  <th className="px-5 py-3 text-left font-semibold">Mesa</th>
+                  {isRestaurant ? <th className="px-5 py-3 text-left font-semibold">Mesa</th> : null}
                   <th className="px-5 py-3 text-left font-semibold">Pagamento</th>
                   <th className="px-5 py-3 text-right font-semibold">Total</th>
                 </tr>
@@ -374,25 +425,25 @@ export default function SalesPage() {
                     <td className="px-5 py-3">
                       <span
                         className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                          (s?.sale_channel || '').toLowerCase() === 'table'
-                            ? 'border-indigo-900/60 bg-indigo-950/40 text-indigo-200'
-                            : 'border-slate-800 bg-slate-950 text-slate-200'
+                          saleChannelBadgeClassName(s?.sale_channel)
                         }`}
                       >
                         {saleChannelLabel[(s?.sale_channel || '').toLowerCase()] || (s?.sale_channel || '-')}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-slate-200">
-                      {(s?.sale_channel || '').toLowerCase() === 'table' ? `Mesa ${s?.table_number ?? '-'} · ${s?.seat_number ?? '-'}` : '-'}
-                    </td>
-                    <td className="px-5 py-3 text-slate-200">{s?.payment_method || '-'}</td>
+                    {isRestaurant ? (
+                      <td className="px-5 py-3 text-slate-200">
+                        {(s?.sale_channel || '').toLowerCase() === 'table' ? `Mesa ${s?.table_number ?? '-'} · ${s?.seat_number ?? '-'}` : '-'}
+                      </td>
+                    ) : null}
+                    <td className="px-5 py-3 text-slate-200">{fmtPaymentMethod(s?.payment_method)}</td>
                     <td className="px-5 py-3 text-right font-semibold text-white">{fmtMoney.format(Number(s?.total || 0))}</td>
                   </tr>
                 ))}
 
                 {!loading && (!sales || sales.length === 0) && (
                   <tr>
-                    <td className="px-5 py-6 text-center text-slate-400" colSpan={8}>
+                    <td className="px-5 py-6 text-center text-slate-400" colSpan={isRestaurant ? 8 : 7}>
                       Sem vendas para mostrar
                     </td>
                   </tr>
@@ -424,9 +475,7 @@ export default function SalesPage() {
             <div className="mt-1">
               <span
                 className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                  (activeSale?.sale_channel || '').toLowerCase() === 'table'
-                    ? 'border-indigo-900/60 bg-indigo-950/40 text-indigo-200'
-                    : 'border-slate-800 bg-slate-950 text-slate-200'
+                  saleChannelBadgeClassName(activeSale?.sale_channel)
                 }`}
               >
                 {saleChannelLabel[(activeSale?.sale_channel || '').toLowerCase()] || (activeSale?.sale_channel || '-')}
@@ -443,15 +492,17 @@ export default function SalesPage() {
             <div className="mt-2 grid grid-cols-2 gap-3">
               <div>
                 <div className="text-xs text-slate-400">Canal</div>
-                <div className="text-sm text-white">{activeSale?.sale_channel || '-'}</div>
+                <div className="text-sm text-white">
+                  {saleChannelLabel[(activeSale?.sale_channel || '').toLowerCase()] || (activeSale?.sale_channel || '-')}
+                </div>
               </div>
               <div>
                 <div className="text-xs text-slate-400">Pagamento</div>
-                <div className="text-sm text-white">{activeSale?.payment_method || '-'}</div>
+                <div className="text-sm text-white">{fmtPaymentMethod(activeSale?.payment_method)}</div>
               </div>
               <div>
                 <div className="text-xs text-slate-400">Status</div>
-                <div className="text-sm text-white">{activeSale?.status || '-'}</div>
+                <div className="text-sm text-white">{fmtStatus(activeSale?.status)}</div>
               </div>
               <div>
                 <div className="text-xs text-slate-400">Pago</div>
@@ -471,7 +522,9 @@ export default function SalesPage() {
               ) : (
                 <div className="col-span-2">
                   <div className="text-xs text-slate-400">Atendimento</div>
-                  <div className="text-sm text-white">Balcão</div>
+                  <div className="text-sm text-white">
+                    {saleChannelLabel[(activeSale?.sale_channel || '').toLowerCase()] || 'Balcão'}
+                  </div>
                 </div>
               )}
             </div>

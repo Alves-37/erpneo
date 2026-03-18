@@ -88,6 +88,10 @@ export default function PdvPage() {
   const [discount, setDiscount] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const [debtCustomerId, setDebtCustomerId] = useState('')
+  const [debtCustomerName, setDebtCustomerName] = useState('')
+  const [debtCustomerNuit, setDebtCustomerNuit] = useState('')
+
   const [cashSession, setCashSession] = useState(null)
   const [cashLoading, setCashLoading] = useState(false)
   const [openCashOpen, setOpenCashOpen] = useState(false)
@@ -592,6 +596,10 @@ export default function PdvPage() {
   useEffect(() => {
     if (paymentMethod === 'debt') {
       setPaid('')
+      // Load customers list on-demand for debt flow.
+      if (!(customers || []).length) {
+        loadCustomers(customerQuery || '')
+      }
       return
     }
     if (paymentMethod !== 'cash') {
@@ -684,6 +692,9 @@ export default function PdvPage() {
     setPaid('')
     setPaymentMethod('cash')
     setDiscount('')
+    setDebtCustomerId('')
+    setDebtCustomerName('')
+    setDebtCustomerNuit('')
     setActiveQuote(null)
   }
 
@@ -821,10 +832,15 @@ export default function PdvPage() {
         setSeatNumber('1')
       } else {
         if (paymentMethod === 'debt') {
+          const hasDebtCustomer = Boolean(String(debtCustomerId || '').trim()) || Boolean(String(debtCustomerName || '').trim())
+          if (!hasDebtCustomer) {
+            toast.error('Selecione o cliente para registrar a dívida.')
+            return
+          }
           await createDebt({
-            customer_id: null,
-            customer_name: null,
-            customer_nuit: null,
+            customer_id: debtCustomerId ? Number(debtCustomerId) : null,
+            customer_name: debtCustomerId ? null : String(debtCustomerName || '').trim() || null,
+            customer_nuit: debtCustomerId ? null : String(debtCustomerNuit || '').trim() || null,
             include_tax: includeTax,
             items: cartLines.map((l) => ({
               product_id: l.product.id,
@@ -1383,7 +1399,15 @@ export default function PdvPage() {
                           <div className="text-xs font-semibold text-slate-400">Pagamento</div>
                           <select
                             value={paymentMethod}
-                            onChange={(e) => setPaymentMethod(e.target.value)}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setPaymentMethod(v)
+                              if (v !== 'debt') {
+                                setDebtCustomerId('')
+                                setDebtCustomerName('')
+                                setDebtCustomerNuit('')
+                              }
+                            }}
                             className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
                           >
                             <option value="cash">Dinheiro</option>
@@ -1430,6 +1454,56 @@ export default function PdvPage() {
                           </div>
                         </div>
                       </div>
+                      {paymentMethod === 'debt' ? (
+                        <div className="mt-3 grid gap-3">
+                          <label className="grid gap-2">
+                            <div className="text-xs font-semibold text-slate-400">Cliente</div>
+                            <select
+                              value={debtCustomerId}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                setDebtCustomerId(v)
+                                if (!v) return
+                                const c = (customers || []).find((x) => String(x.id) === String(v))
+                                if (!c) return
+                                setDebtCustomerName(String(c.name || ''))
+                                setDebtCustomerNuit(String(c.nuit || ''))
+                              }}
+                              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                            >
+                              <option value="">Selecionar cliente</option>
+                              {(customers || []).map((c) => (
+                                <option key={c.id} value={String(c.id)}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          {!debtCustomerId ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              <label className="grid gap-2">
+                                <div className="text-xs font-semibold text-slate-400">Nome do cliente</div>
+                                <input
+                                  value={debtCustomerName}
+                                  onChange={(e) => setDebtCustomerName(e.target.value)}
+                                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                                  type="text"
+                                />
+                              </label>
+                              <label className="grid gap-2">
+                                <div className="text-xs font-semibold text-slate-400">NUIT</div>
+                                <input
+                                  value={debtCustomerNuit}
+                                  onChange={(e) => setDebtCustomerNuit(e.target.value)}
+                                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                                  type="text"
+                                />
+                              </label>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                         <div>Troco</div>
                         <div className="text-slate-200">{Number(change || 0).toFixed(2)}</div>

@@ -258,21 +258,22 @@ export default function ReturnsPage() {
             {loading ? (
               <div className="py-6 text-sm text-slate-300">Carregando...</div>
             ) : sales?.length ? (
-              <div className="grid gap-3">
+              <div className="grid gap-2">
                 {(sales || []).map((s) => (
-                  <div key={s.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <div className="flex items-start justify-between gap-3">
+                  <div key={s.id} className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white">Venda #{s.id}</div>
-                        <div className="mt-1 text-xs text-slate-400">
+                        <div className="mt-0.5 text-[11px] text-slate-400">
                           Estado: <span className="text-slate-200 font-semibold">{s.status || 'paid'}</span>
+                          <span className="mx-2 text-slate-600">|</span>
+                          Itens: <span className="text-slate-200 font-semibold">{(s.items || []).length}</span>
                         </div>
-                        <div className="mt-1 text-xs text-slate-400">Itens: <span className="text-slate-200 font-semibold">{(s.items || []).length}</span></div>
                       </div>
                       <div className="shrink-0 text-sm font-semibold text-white">{fmtMoney.format(Number(s.total || 0))} MZN</div>
                     </div>
 
-                    <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-end gap-2">
+                    <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-end gap-2">
                       <button
                         type="button"
                         disabled={(s.status || 'paid') === 'void'}
@@ -280,7 +281,7 @@ export default function ReturnsPage() {
                           setActiveSale(s)
                           setOpenEdit(true)
                         }}
-                        className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                        className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                       >
                         Editar/Trocar
                       </button>
@@ -291,7 +292,7 @@ export default function ReturnsPage() {
                           setActiveSale(s)
                           setOpenVoid(true)
                         }}
-                        className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-4 py-2.5 text-sm font-semibold text-rose-200 disabled:opacity-60"
+                        className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-60"
                       >
                         Anular (devolução total)
                       </button>
