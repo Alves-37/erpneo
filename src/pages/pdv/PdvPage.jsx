@@ -12,6 +12,8 @@ import { createSale } from '../../api/sales.js'
 import { createDebt } from '../../api/debts.js'
 import { convertQuoteToSale, createQuote, deleteQuote, listQuotes, updateQuote } from '../../api/quotes.js'
 import { closeCashSession, getCurrentCashSession, getCashSessionSummary, openCashSession } from '../../api/cashSessions.js'
+import { createCustomer, listCustomers } from '../../api/customers.js'
+import { downloadQuotePdf } from '../../api/quotes.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 
@@ -83,6 +85,7 @@ export default function PdvPage() {
 
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [paid, setPaid] = useState('')
+  const [discount, setDiscount] = useState('')
   const [saving, setSaving] = useState(false)
 
   const [cashSession, setCashSession] = useState(null)
@@ -117,6 +120,11 @@ export default function PdvPage() {
   const [quoteCustomerName, setQuoteCustomerName] = useState('')
   const [quoteCustomerNuit, setQuoteCustomerNuit] = useState('')
 
+  const [customersLoading, setCustomersLoading] = useState(false)
+  const [customers, setCustomers] = useState([])
+  const [customerQuery, setCustomerQuery] = useState('')
+  const [selectedCustomerId, setSelectedCustomerId] = useState('')
+
   const userLabel = useMemo(() => {
     const username = String(me?.username || '').trim()
     if (username) return username
@@ -142,7 +150,66 @@ export default function PdvPage() {
     }
   }
 
+  async function loadCustomers(query = '') {
+    setCustomersLoading(true)
+    try {
+      const rows = await listCustomers({ q: String(query || '').trim() || undefined, limit: 80, offset: 0 })
+      setCustomers(rows || [])
+    } catch {
+      setCustomers([])
+    } finally {
+      setCustomersLoading(false)
+    }
+  }
+
+  async function ensureCustomerForQuote({ name, nuit }) {
+    const nName = String(name || '').trim()
+    const nNuit = String(nuit || '').trim()
+
+    if (!nName && !nNuit) return null
+
+    try {
+      const q = nName || nNuit
+      const rows = await listCustomers({ q, limit: 80, offset: 0 })
+      const exact = (rows || []).find((c) => {
+        const cn = String(c?.name || '').trim().toLowerCase()
+        const nn = String(c?.nuit || '').trim().toLowerCase()
+        if (nNuit && nn && nn === nNuit.toLowerCase()) return true
+        if (nName && cn && cn === nName.toLowerCase()) return true
+        return false
+      })
+      if (exact?.id) return exact
+    } catch {
+      // ignore
+    }
+
+    try {
+      if (!nName) return null
+      const created = await createCustomer({ name: nName, nuit: nNuit || null })
+      return created || null
+    } catch {
+      return null
+    }
+  }
+
   const [convertingQuote, setConvertingQuote] = useState(false)
+
+  useEffect(() => {
+    if (!openSaveQuote) return
+    setCustomerQuery('')
+    setSelectedCustomerId('')
+    loadCustomers('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSaveQuote])
+
+  useEffect(() => {
+    if (!openSaveQuote) return
+    const t = setTimeout(() => {
+      loadCustomers(customerQuery)
+    }, 250)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerQuery, openSaveQuote])
 
   const openDetails = (p) => {
     setActiveProduct(p || null)
@@ -172,6 +239,21 @@ export default function PdvPage() {
       const cid = Number(activeCategoryId)
       out = out.filter((p) => Number(p.category_id || 0) === cid)
     }
+
+    out = out.filter((p) => {
+      const sku = String(p?.sku || '').trim().toUpperCase()
+      if (sku === 'SERVICO_IMPRESSAO') return false
+
+      const trackStock = Boolean(p?.track_stock)
+      if (!trackStock) return true
+
+      const minStock = Number(p?.min_stock || 0)
+      const stockQty = Number(p?.stock_qty ?? 0)
+      if (Number.isFinite(minStock) && minStock > 0) {
+        if (Number.isFinite(stockQty) && stockQty <= minStock) return false
+      }
+      return true
+    })
 
     return out
   }, [items, activeCategoryId, q])
@@ -214,6 +296,20 @@ export default function PdvPage() {
   const grossTotal = useMemo(() => {
     return includeTax ? total + taxTotal : total
   }, [includeTax, taxTotal, total])
+
+  const discountNum = useMemo(() => {
+    const n = Number(String(discount || '').replace(',', '.'))
+    return Number.isFinite(n) ? n : 0
+  }, [discount])
+
+  const appliedDiscount = useMemo(() => {
+    const d = Math.max(0, discountNum)
+    return Math.min(d, Math.max(0, grossTotal))
+  }, [discountNum, grossTotal])
+
+  const finalTotal = useMemo(() => {
+    return Math.max(0, grossTotal - appliedDiscount)
+  }, [grossTotal, appliedDiscount])
 
   const cartKey = useMemo(() => {
     if (!isRestaurant) return 'counter'
@@ -271,13 +367,13 @@ export default function PdvPage() {
   const effectivePaidNum = useMemo(() => {
     if (paymentMethod === 'cash') return paidNum
     if (paymentMethod === 'debt') return 0
-    return grossTotal
-  }, [paymentMethod, paidNum, grossTotal])
+    return finalTotal
+  }, [paymentMethod, paidNum, finalTotal])
 
   const change = useMemo(() => {
     if (paymentMethod !== 'cash') return 0
-    return Math.max(0, effectivePaidNum - grossTotal)
-  }, [paymentMethod, effectivePaidNum, grossTotal])
+    return Math.max(0, effectivePaidNum - finalTotal)
+  }, [paymentMethod, effectivePaidNum, finalTotal])
 
   const isTableOrder = useMemo(() => {
     return isRestaurant && saleChannel === 'table'
@@ -499,10 +595,10 @@ export default function PdvPage() {
       return
     }
     if (paymentMethod !== 'cash') {
-      setPaid(grossTotal ? Number(grossTotal).toFixed(2) : '')
+      setPaid(finalTotal ? Number(finalTotal).toFixed(2) : '')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentMethod, grossTotal])
+  }, [paymentMethod, finalTotal])
 
   function addToCart(p) {
     setCart((prev) => {
@@ -587,6 +683,7 @@ export default function PdvPage() {
     setCart({})
     setPaid('')
     setPaymentMethod('cash')
+    setDiscount('')
     setActiveQuote(null)
   }
 
@@ -610,10 +707,22 @@ export default function PdvPage() {
     }
     setSaving(true)
     try {
+      let customerName = quoteCustomerName.trim() || null
+      let customerNuit = quoteCustomerNuit.trim() || null
+
+      if (!selectedCustomerId && (customerName || customerNuit)) {
+        const ensured = await ensureCustomerForQuote({ name: customerName, nuit: customerNuit })
+        if (ensured?.id) {
+          customerName = String(ensured?.name || customerName || '').trim() || null
+          customerNuit = String(ensured?.nuit || customerNuit || '').trim() || null
+          setSelectedCustomerId(String(ensured.id))
+        }
+      }
+
       const payload = {
         series: String(quoteSeries || 'A').trim().toUpperCase() || 'A',
-        customer_name: quoteCustomerName.trim() || null,
-        customer_nuit: quoteCustomerNuit.trim() || null,
+        customer_name: customerName,
+        customer_nuit: customerNuit,
         currency: 'MZN',
         items: cartLines.map((l) => ({
           product_id: l.product.id,
@@ -641,7 +750,7 @@ export default function PdvPage() {
     if (!activeQuote?.id) return
     setConvertingQuote(true)
     try {
-      const paidValue = paymentMethod === 'cash' ? effectivePaidNum : grossTotal
+      const paidValue = paymentMethod === 'cash' ? effectivePaidNum : finalTotal
       const conv = await convertQuoteToSale(Number(activeQuote.id), {
         payment_method: paymentMethod,
         paid: paidValue,
@@ -1298,6 +1407,26 @@ export default function PdvPage() {
                           />
                         </label>
                       </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <label className="grid gap-2">
+                          <div className="text-xs font-semibold text-slate-400">Desconto</div>
+                          <input
+                            value={discount}
+                            onChange={(e) => setDiscount(e.target.value)}
+                            disabled={!cartLines.length || paymentMethod === 'debt'}
+                            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            type="text"
+                          />
+                        </label>
+                        <div className="grid gap-2">
+                          <div className="text-xs font-semibold text-slate-400">Total a pagar</div>
+                          <div className="h-10 rounded-xl border border-slate-800 bg-slate-950 px-3 flex items-center text-sm font-semibold text-white">
+                            {Number(finalTotal || 0).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
                       <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                         <div>Troco</div>
                         <div className="text-slate-200">{Number(change || 0).toFixed(2)}</div>
@@ -1360,8 +1489,10 @@ export default function PdvPage() {
                     <div className="text-right text-slate-100 font-semibold">{Number(total || 0).toFixed(2)} MZN</div>
                     <div className="text-slate-300">IVA</div>
                     <div className="text-right text-slate-100 font-semibold">{Number(taxTotal || 0).toFixed(2)} MZN</div>
+                    <div className="text-slate-300">Desconto</div>
+                    <div className="text-right text-slate-100 font-semibold">{Number(appliedDiscount || 0).toFixed(2)} MZN</div>
                     <div className="text-slate-300">Total</div>
-                    <div className="text-right text-white text-lg font-semibold">{Number(grossTotal || 0).toFixed(2)} MZN</div>
+                    <div className="text-right text-white text-lg font-semibold">{Number(finalTotal || 0).toFixed(2)} MZN</div>
                   </div>
                 </div>
               </div>
@@ -1484,6 +1615,26 @@ export default function PdvPage() {
                   />
                 </label>
               </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="grid gap-2">
+                  <div className="text-xs font-semibold text-slate-400">Desconto</div>
+                  <input
+                    value={discount}
+                    onChange={(e) => setDiscount(e.target.value)}
+                    disabled={!cartLines.length || paymentMethod === 'debt'}
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    type="text"
+                  />
+                </label>
+                <div className="grid gap-2">
+                  <div className="text-xs font-semibold text-slate-400">Total a pagar</div>
+                  <div className="h-10 rounded-xl border border-slate-800 bg-slate-950 px-3 flex items-center text-sm font-semibold text-white">
+                    {Number(finalTotal || 0).toFixed(2)}
+                  </div>
+                </div>
+              </div>
               <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                 <div>Troco</div>
                 <div className="text-slate-200">{Number(change || 0).toFixed(2)}</div>
@@ -1500,8 +1651,10 @@ export default function PdvPage() {
             <div className="text-right text-slate-100 font-semibold">{Number(total || 0).toFixed(2)} MZN</div>
             <div className="text-slate-300">IVA</div>
             <div className="text-right text-slate-100 font-semibold">{Number(taxTotal || 0).toFixed(2)} MZN</div>
+            <div className="text-slate-300">Desconto</div>
+            <div className="text-right text-slate-100 font-semibold">{Number(appliedDiscount || 0).toFixed(2)} MZN</div>
             <div className="text-slate-300">Total</div>
-            <div className="text-right text-white text-lg font-semibold">{Number(grossTotal || 0).toFixed(2)} MZN</div>
+            <div className="text-right text-white text-lg font-semibold">{Number(finalTotal || 0).toFixed(2)} MZN</div>
           </div>
 
           <button
@@ -1527,7 +1680,7 @@ export default function PdvPage() {
       >
         <div className="grid gap-4">
           <div className="text-sm text-slate-200">
-            Total: <span className="font-semibold text-white">{Number(grossTotal || 0).toFixed(2)} MZN</span>
+            Total: <span className="font-semibold text-white">{Number(finalTotal || 0).toFixed(2)} MZN</span>
           </div>
           <div className="text-xs text-slate-400">
             {isTableOrder
@@ -1806,25 +1959,74 @@ export default function PdvPage() {
                 type="text"
               />
             </label>
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium text-slate-200">Cliente</div>
+                <button
+                  type="button"
+                  disabled={customersLoading}
+                  onClick={async () => loadCustomers(customerQuery)}
+                  className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  {customersLoading ? 'Carregando...' : 'Atualizar'}
+                </button>
+              </div>
+              <input
+                value={customerQuery}
+                onChange={(e) => setCustomerQuery(e.target.value)}
+                placeholder="Pesquisar cliente"
+                className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                type="text"
+              />
+              <select
+                value={selectedCustomerId}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setSelectedCustomerId(v)
+                  if (!v) return
+                  const c = (customers || []).find((x) => String(x.id) === String(v))
+                  if (!c) return
+                  setQuoteCustomerName(String(c.name || ''))
+                  setQuoteCustomerNuit(String(c.nuit || ''))
+                }}
+                className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              >
+                <option value="">Selecionar cliente (opcional)</option>
+                {(customers || []).map((c) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.name} {c.nuit ? `· NUIT: ${c.nuit}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="grid gap-2">
+              <div className="text-sm font-medium text-slate-200">Nome do cliente (opcional)</div>
+              <input
+                value={quoteCustomerName}
+                onChange={(e) => {
+                  setSelectedCustomerId('')
+                  setQuoteCustomerName(e.target.value)
+                }}
+                className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                type="text"
+              />
+            </label>
             <label className="grid gap-2">
               <div className="text-sm font-medium text-slate-200">NUIT (opcional)</div>
               <input
                 value={quoteCustomerNuit}
-                onChange={(e) => setQuoteCustomerNuit(e.target.value)}
+                onChange={(e) => {
+                  setSelectedCustomerId('')
+                  setQuoteCustomerNuit(e.target.value)
+                }}
                 className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
                 type="text"
               />
             </label>
           </div>
-          <label className="grid gap-2">
-            <div className="text-sm font-medium text-slate-200">Cliente (opcional)</div>
-            <input
-              value={quoteCustomerName}
-              onChange={(e) => setQuoteCustomerName(e.target.value)}
-              className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
-              type="text"
-            />
-          </label>
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
@@ -1867,6 +2069,7 @@ export default function PdvPage() {
                       setQuoteSeries(q.series || 'A')
                       setQuoteCustomerName(q.customer_name || '')
                       setQuoteCustomerNuit(q.customer_nuit || '')
+                      setSelectedCustomerId('')
                       setOpenQuotes(false)
                       toast.success(`Cotação carregada: ${q.series}/${q.number}`)
                     }}
@@ -1882,6 +2085,23 @@ export default function PdvPage() {
                     <div className="mt-1 text-xs text-slate-300">
                       Total: {Number(q.gross_total || 0).toFixed(2)} {q.currency || ''}
                     </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const blob = await downloadQuotePdf(Number(q.id))
+                        const url = window.URL.createObjectURL(blob)
+                        window.open(url, '_blank', 'noopener,noreferrer')
+                        window.setTimeout(() => window.URL.revokeObjectURL(url), 20000)
+                      } catch {
+                        toast.error('Não foi possível gerar o PDF agora.')
+                      }
+                    }}
+                    className="shrink-0 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100"
+                  >
+                    PDF
                   </button>
 
                   {q.status === 'open' ? (

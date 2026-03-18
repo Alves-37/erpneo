@@ -24,3 +24,8 @@ export async function deleteQuote(quoteId) {
   const res = await apiClient.delete(`/quotes/${quoteId}`)
   return res.data
 }
+
+export async function downloadQuotePdf(quoteId) {
+  const res = await apiClient.get(`/quotes/${quoteId}/pdf`, { responseType: 'blob' })
+  return res.data
+}
