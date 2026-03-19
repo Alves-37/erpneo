@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/authStore.js'
 const nav = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/products', label: 'Produtos' },
+  { to: '/raw-materials', label: 'Matérias-primas', restaurantOnly: true },
   { to: '/categories', label: 'Categorias', pharmacyOnly: true },
   { to: '/reprography/printers', label: 'Impressoras', reprographyOnly: true },
   { to: '/warehouse', label: 'Armazém' },
@@ -281,13 +282,17 @@ export default function DashboardLayout() {
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 relative"
+                className={`lg:hidden p-2 rounded-lg text-slate-200 relative transition-all duration-150 ${
+                  isRestaurant && hasNewOrders
+                    ? 'bg-rose-600 text-white animate-pulse hover:bg-rose-500'
+                    : 'bg-slate-800 hover:bg-slate-700'
+                }`}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
                 {isRestaurant && hasNewOrders ? (
-                  <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-rose-500 shadow-[0_0_0_6px_rgba(244,63,94,0.18)] animate-pulse" />
+                  <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-rose-200 shadow-[0_0_0_6px_rgba(244,63,94,0.14)]" />
                 ) : null}
               </button>
 

@@ -4,7 +4,16 @@ import { listCompanies } from '../../api/companies.js'
 import { getMyBranch } from '../../api/branches.js'
 import { listEstablishments } from '../../api/establishments.js'
 import { listProductCategories } from '../../api/productCategories.js'
-import { createProduct, deleteProduct, listProductImages, listProducts, updateProduct, uploadProductImage } from '../../api/products.js'
+import {
+  createProduct,
+  deleteProduct,
+  getProductRecipe,
+  listProductImages,
+  listProducts,
+  updateProduct,
+  uploadProductImage,
+  upsertProductRecipe,
+} from '../../api/products.js'
 import { listSuppliers } from '../../api/suppliers.js'
 import { listStockLocations } from '../../api/stockLocations.js'
 import { toast } from '../../services/toast.js'
@@ -103,6 +112,30 @@ export default function ProductsPage() {
   const [promoPrice, setPromoPrice] = useState('')
   const [images, setImages] = useState([])
   const [creating, setCreating] = useState(false)
+
+  const [recipeLoading, setRecipeLoading] = useState(false)
+  const [recipeSaving, setRecipeSaving] = useState(false)
+  const [recipeItems, setRecipeItems] = useState([])
+  const [recipeIngredientId, setRecipeIngredientId] = useState('')
+  const [recipeQty, setRecipeQty] = useState('')
+  const [recipeUnit, setRecipeUnit] = useState('un')
+  const [recipeWaste, setRecipeWaste] = useState('0')
+
+  const RECIPE_UNIT_OPTIONS = useMemo(() => {
+    return [
+      { value: 'un', label: 'Un' },
+      { value: 'kg', label: 'Kg' },
+      { value: 'g', label: 'g' },
+      { value: 'l', label: 'L' },
+      { value: 'ml', label: 'ml' },
+    ]
+  }, [])
+
+  const productsById = useMemo(() => {
+    const map = new Map()
+    for (const p of items || []) map.set(Number(p.id), p)
+    return map
+  }, [items])
 
   const [establishments, setEstablishments] = useState([])
   const establishmentsById = useMemo(() => {
@@ -237,6 +270,7 @@ export default function ProductsPage() {
         is_active: showInactiveOnly ? false : true,
         establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
         category_id: filterCategoryId ? Number(filterCategoryId) : undefined,
+        show_in_menu: isRestaurant ? true : undefined,
       })
       setItems(products || [])
 
@@ -353,6 +387,79 @@ export default function ProductsPage() {
     setEstablishmentId('')
   }
 
+  function resetRecipeForm() {
+    setRecipeItems([])
+    setRecipeIngredientId('')
+    setRecipeQty('')
+    setRecipeUnit('un')
+    setRecipeWaste('0')
+  }
+
+  async function loadRecipeForProduct(productId) {
+    if (!productId) return
+    if (!isRestaurant) return
+    setRecipeLoading(true)
+    try {
+      const res = await getProductRecipe(productId)
+      const incoming = Array.isArray(res?.items) ? res.items : []
+      setRecipeItems(
+        incoming.map((it) => ({
+          id: it?.id || null,
+          ingredient_product_id: Number(it.ingredient_product_id),
+          qty: it?.qty ?? 0,
+          unit: it?.unit || 'un',
+          waste_percent: it?.waste_percent ?? 0,
+        })),
+      )
+    } catch (err) {
+      setRecipeItems([])
+      const msg = err?.response?.data?.detail
+      toast.error(msg || 'Não foi possível carregar a ficha técnica.')
+    } finally {
+      setRecipeLoading(false)
+    }
+  }
+
+  async function saveRecipe(productId) {
+    if (!productId) return
+    if (!isRestaurant) return
+
+    if (!recipeItems.length) {
+      toast.error('Adicione pelo menos 1 ingrediente na ficha técnica.')
+      return
+    }
+
+    const normalizedItems = recipeItems
+      .map((it) => {
+        const qty = it?.qty === '' ? NaN : Number(String(it?.qty).replace(',', '.'))
+        const waste = it?.waste_percent === '' ? 0 : Number(String(it?.waste_percent).replace(',', '.'))
+        return {
+          ingredient_product_id: Number(it.ingredient_product_id),
+          qty,
+          unit: it.unit || 'un',
+          waste_percent: waste,
+        }
+      })
+      .filter((it) => it.ingredient_product_id && Number.isFinite(it.qty) && it.qty > 0)
+
+    if (!normalizedItems.length) {
+      toast.error('Ficha técnica inválida. Verifique as quantidades.')
+      return
+    }
+
+    setRecipeSaving(true)
+    try {
+      await upsertProductRecipe(productId, { items: normalizedItems })
+      toast.success('Ficha técnica guardada.')
+      await loadRecipeForProduct(productId)
+    } catch (err) {
+      const msg = err?.response?.data?.detail
+      toast.error(msg || 'Não foi possível guardar a ficha técnica.')
+    } finally {
+      setRecipeSaving(false)
+    }
+  }
+
   function fillFormFromProduct(p) {
     setName(p?.name || '')
     setSku(p?.sku || '')
@@ -401,6 +508,16 @@ export default function ProductsPage() {
 
     setOpenCreate(true)
   }
+
+  useEffect(() => {
+    if (openCreate && editingId && isRestaurant) {
+      loadRecipeForProduct(editingId)
+    }
+    if (!openCreate) {
+      resetRecipeForm()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCreate, editingId, isRestaurant])
 
   useEffect(() => {
     if (!isReprography) return
@@ -515,6 +632,7 @@ export default function ProductsPage() {
       setOpenCreate(false)
       setEditingId(null)
       resetForm()
+      resetRecipeForm()
       await load()
       await loadCategories(businessType)
     } catch (err) {
@@ -959,6 +1077,7 @@ export default function ProductsPage() {
           if (!creating) {
             setOpenCreate(false)
             setEditingId(null)
+            resetRecipeForm()
           }
         }}
       >
@@ -1174,6 +1293,228 @@ export default function ProductsPage() {
                     />
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+
+            {isRestaurant && editingId ? (
+              <div className="md:col-span-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-100">Ficha técnica</div>
+                    <div className="mt-1 text-xs text-slate-400">Ingredientes consumidos automaticamente quando o pedido entra em preparação.</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => loadRecipeForProduct(editingId)}
+                      className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100"
+                      disabled={recipeLoading || recipeSaving}
+                    >
+                      Recarregar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => saveRecipe(editingId)}
+                      className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-2 text-xs font-semibold text-white"
+                      disabled={recipeLoading || recipeSaving}
+                    >
+                      {recipeSaving ? 'A guardar...' : 'Guardar'}
+                    </button>
+                  </div>
+                </div>
+
+                {recipeLoading ? (
+                  <div className="mt-4 text-sm text-slate-300">Carregando ficha técnica...</div>
+                ) : (
+                  <>
+                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-12">
+                      <label className="grid gap-2 md:col-span-6">
+                        <div className="text-xs font-semibold text-slate-400">Ingrediente (produto do stock)</div>
+                        <select
+                          value={recipeIngredientId}
+                          onChange={(e) => setRecipeIngredientId(e.target.value)}
+                          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                        >
+                          <option value="">Selecione...</option>
+                          {(items || [])
+                            .filter((p) => p?.id && p?.is_active)
+                            .filter((p) => Number(p.id) !== Number(editingId))
+                            .filter((p) => Boolean(p?.track_stock) && !Boolean(p?.is_service))
+                            .slice()
+                            .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'pt', { sensitivity: 'base' }))
+                            .map((p) => (
+                              <option key={p.id} value={String(p.id)}>
+                                {p.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+
+                      <label className="grid gap-2 md:col-span-2">
+                        <div className="text-xs font-semibold text-slate-400">Qtd</div>
+                        <input
+                          value={recipeQty}
+                          onChange={(e) => setRecipeQty(e.target.value)}
+                          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                          placeholder="Ex: 0.2"
+                          {...numericProps()}
+                        />
+                      </label>
+
+                      <label className="grid gap-2 md:col-span-2">
+                        <div className="text-xs font-semibold text-slate-400">Unidade</div>
+                        <select
+                          value={recipeUnit}
+                          onChange={(e) => setRecipeUnit(e.target.value)}
+                          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                        >
+                          {RECIPE_UNIT_OPTIONS.map((u) => (
+                            <option key={u.value} value={u.value}>
+                              {u.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="grid gap-2 md:col-span-2">
+                        <div className="text-xs font-semibold text-slate-400">Desperdício (%)</div>
+                        <input
+                          value={recipeWaste}
+                          onChange={(e) => setRecipeWaste(e.target.value)}
+                          className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                          placeholder="0"
+                          {...numericProps()}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        className="w-full sm:w-auto rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100"
+                        onClick={() => {
+                          const ingId = recipeIngredientId ? Number(recipeIngredientId) : null
+                          const parsedQty = recipeQty === '' ? NaN : Number(String(recipeQty).replace(',', '.'))
+                          const parsedWaste = recipeWaste === '' ? 0 : Number(String(recipeWaste).replace(',', '.'))
+
+                          if (!ingId) {
+                            toast.error('Selecione um ingrediente.')
+                            return
+                          }
+                          if (!Number.isFinite(parsedQty) || parsedQty <= 0) {
+                            toast.error('Quantidade inválida.')
+                            return
+                          }
+                          if (!Number.isFinite(parsedWaste) || parsedWaste < 0) {
+                            toast.error('Desperdício inválido.')
+                            return
+                          }
+
+                          setRecipeItems((prev) => {
+                            const next = prev.slice()
+                            next.push({
+                              id: null,
+                              ingredient_product_id: ingId,
+                              qty: String(parsedQty),
+                              unit: recipeUnit,
+                              waste_percent: String(parsedWaste),
+                            })
+                            return next
+                          })
+                          setRecipeIngredientId('')
+                          setRecipeQty('')
+                          setRecipeUnit('un')
+                          setRecipeWaste('0')
+                        }}
+                        disabled={recipeLoading || recipeSaving}
+                      >
+                        + Adicionar ingrediente
+                      </button>
+                    </div>
+
+                    <div className="mt-4">
+                      {!recipeItems.length ? (
+                        <div className="text-sm text-slate-400">Sem ingredientes adicionados.</div>
+                      ) : (
+                        <div className="grid gap-2">
+                          {recipeItems.map((it, idx) => {
+                            const p = productsById.get(Number(it.ingredient_product_id))
+                            return (
+                              <div
+                                key={`${it.ingredient_product_id}-${idx}`}
+                                className="grid grid-cols-12 gap-2 items-center rounded-xl border border-slate-800 bg-slate-900 px-3 py-2"
+                              >
+                                <div className="col-span-5 text-sm text-slate-100 truncate" title={p?.name || ''}>
+                                  {p?.name || `#${it.ingredient_product_id}`}
+                                </div>
+                                <div className="col-span-2">
+                                  <input
+                                    value={String(it.qty ?? '')}
+                                    onChange={(e) => {
+                                      const v = e.target.value
+                                      setRecipeItems((prev) => {
+                                        const next = prev.slice()
+                                        next[idx] = { ...next[idx], qty: v }
+                                        return next
+                                      })
+                                    }}
+                                    className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                                    {...numericProps()}
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <select
+                                    value={it.unit || 'un'}
+                                    onChange={(e) => {
+                                      const v = e.target.value
+                                      setRecipeItems((prev) => {
+                                        const next = prev.slice()
+                                        next[idx] = { ...next[idx], unit: v }
+                                        return next
+                                      })
+                                    }}
+                                    className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                                  >
+                                    {RECIPE_UNIT_OPTIONS.map((u) => (
+                                      <option key={u.value} value={u.value}>
+                                        {u.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="col-span-2">
+                                  <input
+                                    value={String(it.waste_percent ?? 0)}
+                                    onChange={(e) => {
+                                      const v = e.target.value
+                                      setRecipeItems((prev) => {
+                                        const next = prev.slice()
+                                        next[idx] = { ...next[idx], waste_percent: v }
+                                        return next
+                                      })
+                                    }}
+                                    className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                                    {...numericProps()}
+                                  />
+                                </div>
+                                <div className="col-span-1 flex justify-end">
+                                  <button
+                                    type="button"
+                                    className="rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2 py-1 text-xs font-semibold text-rose-200"
+                                    onClick={() => setRecipeItems((prev) => prev.filter((_, i) => i !== idx))}
+                                    disabled={recipeLoading || recipeSaving}
+                                  >
+                                    Remover
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ) : null}
 

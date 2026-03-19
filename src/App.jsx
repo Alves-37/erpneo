@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import LoginPage from './pages/login/LoginPage.jsx'
 import DashboardPage from './pages/dashboard/DashboardPage.jsx'
 import ProductsPage from './pages/products/ProductsPage.jsx'
+import RawMaterialsPage from './pages/rawMaterials/RawMaterialsPage.jsx'
 import CategoriesPage from './pages/categories/CategoriesPage.jsx'
 import StockPage from './pages/stock/StockPage.jsx'
 import WarehousePage from './pages/stock/WarehousePage.jsx'
@@ -89,6 +90,14 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route
+            path="/raw-materials"
+            element={
+              <RestaurantOnlyRoute>
+                <RawMaterialsPage />
+              </RestaurantOnlyRoute>
+            }
+          />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/stock" element={<StockPage />} />
           <Route path="/stock/history" element={<StockHistoryPage />} />
