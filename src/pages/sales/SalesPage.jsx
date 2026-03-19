@@ -238,6 +238,7 @@ export default function SalesPage() {
       counter: 'Balcão',
       table: 'Mesa',
       debt: 'Dívida',
+      printer: 'Impressora',
     }
   }, [])
 
@@ -247,7 +248,8 @@ export default function SalesPage() {
       if (c === 'debt') return 'border-amber-900/60 bg-amber-950/40 text-amber-200'
       if (c === 'table') return 'border-indigo-900/60 bg-indigo-950/40 text-indigo-200'
       if (c === 'counter') return 'border-emerald-900/60 bg-emerald-950/40 text-emerald-200'
-      return 'border-slate-800 bg-slate-950 text-slate-200'
+      if (c === 'printer') return 'border-sky-900/60 bg-sky-950/40 text-sky-200'
+      return 'border-slate-700 bg-slate-900/40 text-slate-200'
     }
   }, [])
 

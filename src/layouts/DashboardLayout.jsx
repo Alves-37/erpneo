@@ -21,6 +21,7 @@ const nav = [
   { to: '/pdv', label: 'PDV' },
   { to: '/orders', label: 'Pedidos', restaurantOnly: true },
   { to: '/tables', label: 'Mesas', restaurantOnly: true },
+  { to: '/delivery-zones', label: 'Zonas de entrega', restaurantOnly: true },
   { to: '/finance', label: 'Finanças' },
   { to: '/reports', label: 'Relatórios' },
   { to: '/establishments', label: 'Pontos', adminOnly: true },

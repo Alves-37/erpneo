@@ -97,6 +97,22 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
+  useEffect(() => {
+    if (activeTab !== 'sales') return
+    if (!salesStartDay || !salesEndDay) return
+    if (String(salesStartDay) > String(salesEndDay)) {
+      setSales(null)
+      return
+    }
+
+    const t = setTimeout(() => {
+      loadSales(salesStartDay, salesEndDay)
+    }, 350)
+
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, salesStartDay, salesEndDay])
+
   function downloadCsv(filename, rows) {
     const escape = (v) => {
       const s = String(v ?? '')

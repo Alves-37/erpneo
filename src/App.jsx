@@ -16,6 +16,7 @@ import DebtsPage from './pages/debts/DebtsPage.jsx'
 import ReturnsPage from './pages/returns/ReturnsPage.jsx'
 import TablesPage from './pages/tables/TablesPage.jsx'
 import OrdersPage from './pages/orders/OrdersPage.jsx'
+import DeliveryZonesPage from './pages/deliveryZones/DeliveryZonesPage.jsx'
 import FinancePage from './pages/finance/FinancePage.jsx'
 import ReportsPage from './pages/reports/ReportsPage.jsx'
 import SettingsPage from './pages/settings/SettingsPage.jsx'
@@ -111,6 +112,14 @@ function App() {
             element={
               <RestaurantOnlyRoute>
                 <OrdersPage />
+              </RestaurantOnlyRoute>
+            }
+          />
+          <Route
+            path="/delivery-zones"
+            element={
+              <RestaurantOnlyRoute>
+                <DeliveryZonesPage />
               </RestaurantOnlyRoute>
             }
           />

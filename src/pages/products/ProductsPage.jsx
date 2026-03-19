@@ -98,6 +98,9 @@ export default function ProductsPage() {
   const [isActive, setIsActive] = useState(true)
   const [descricao, setDescricao] = useState('')
   const [validade, setValidade] = useState('')
+  const [isDailyDish, setIsDailyDish] = useState(false)
+  const [promoEnabled, setPromoEnabled] = useState(false)
+  const [promoPrice, setPromoPrice] = useState('')
   const [images, setImages] = useState([])
   const [creating, setCreating] = useState(false)
 
@@ -338,6 +341,9 @@ export default function ProductsPage() {
     setIsActive(true)
     setDescricao('')
     setValidade('')
+    setIsDailyDish(false)
+    setPromoEnabled(false)
+    setPromoPrice('')
     setImages([])
     setCategoryMode('select')
     setCategoryId('')
@@ -364,6 +370,9 @@ export default function ProductsPage() {
     setIsActive(Boolean(p?.is_active))
     setDescricao(p?.attributes?.descricao != null ? String(p.attributes.descricao) : '')
     setValidade(p?.attributes?.validade != null ? String(p.attributes.validade) : '')
+    setIsDailyDish(Boolean(p?.attributes?.is_daily_dish))
+    setPromoEnabled(Boolean(p?.attributes?.promo_enabled))
+    setPromoPrice(p?.attributes?.promo_price != null ? String(p.attributes.promo_price) : '')
 
     if (Boolean(p?.is_service) && serviceCategoryId && categoryMode === 'select') {
       setCategoryId(String(serviceCategoryId))
@@ -467,6 +476,16 @@ export default function ProductsPage() {
       ...(payload.attributes || {}),
       descricao: descricao.trim() || null,
       ...(isPharmacy ? { validade: validade || null } : {}),
+      ...(isRestaurant
+        ? {
+            is_daily_dish: Boolean(isDailyDish),
+            promo_enabled: Boolean(promoEnabled),
+            promo_price:
+              promoEnabled && promoPrice !== '' && Number.isFinite(Number(String(promoPrice).replace(',', '.')))
+                ? Number(String(promoPrice).replace(',', '.'))
+                : null,
+          }
+        : {}),
     }
 
     if (isAdmin && establishmentId) payload.establishment_id = Number(establishmentId)
@@ -1120,6 +1139,43 @@ export default function ProductsPage() {
                 type="text"
               />
             </div>
+
+            {isRestaurant ? (
+              <div className="grid gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={isDailyDish}
+                    onChange={(e) => setIsDailyDish(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+                  />
+                  Prato do Dia
+                </label>
+
+                <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={promoEnabled}
+                    onChange={(e) => setPromoEnabled(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+                  />
+                  Promoção
+                </label>
+
+                {promoEnabled ? (
+                  <div className="grid gap-2">
+                    <div className="text-xs font-semibold text-slate-400">Preço promocional</div>
+                    <input
+                      value={promoPrice}
+                      onChange={(e) => setPromoPrice(e.target.value)}
+                      className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                      placeholder="0.00"
+                      {...numericProps()}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {isPharmacy ? (
               <div className="grid gap-2">
