@@ -280,13 +280,26 @@ export default function OrdersPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {rows.map((o) => {
               const total = (o.items || []).reduce((acc, i) => acc + Number(i.line_total || 0), 0)
+              const isDelivery = String(o.order_type || '').toLowerCase() === 'delivery'
               return (
                 <div key={o.id} className="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
                   <div className="border-b border-slate-800 bg-slate-900 px-3 py-2.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-white">Mesa {o.table_number}</div>
-                        <div className="mt-0.5 text-xs text-slate-400">Cliente {o.seat_number}</div>
+                        <div className="truncate text-sm font-semibold text-white">
+                          {isDelivery ? 'Delivery' : `Mesa ${o.table_number}`}
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-400">
+                          {isDelivery
+                            ? `${o.customer_name || 'Cliente'}${o.customer_phone ? ` · ${o.customer_phone}` : ''}`
+                            : `Cliente ${o.seat_number}`}
+                        </div>
+                        {isDelivery ? (
+                          <div className="mt-1 text-[11px] text-slate-400 truncate" title={o.delivery_address || ''}>
+                            {o.delivery_zone_name ? `${o.delivery_zone_name} · ` : ''}
+                            {o.delivery_address || ''}
+                          </div>
+                        ) : null}
                       </div>
                       <div
                         className={`shrink-0 rounded-xl border px-3 py-1.5 text-[11px] font-semibold ${
@@ -361,11 +374,29 @@ export default function OrdersPage() {
 
       <Modal
         open={openDetails}
-        title={detailsOrder ? `Detalhes · Mesa ${detailsOrder.table_number} · Cliente ${detailsOrder.seat_number}` : 'Detalhes'}
+        title={
+          detailsOrder
+            ? String(detailsOrder.order_type || '').toLowerCase() === 'delivery'
+              ? `Detalhes · Delivery`
+              : `Detalhes · Mesa ${detailsOrder.table_number} · Cliente ${detailsOrder.seat_number}`
+            : 'Detalhes'
+        }
         onClose={() => setOpenDetails(false)}
       >
         {!detailsOrder ? null : (
           <div className="grid gap-4">
+            {String(detailsOrder.order_type || '').toLowerCase() === 'delivery' ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <div className="text-sm font-semibold text-white">Cliente</div>
+                <div className="mt-1 text-sm text-slate-200">{detailsOrder.customer_name || '-'}</div>
+                <div className="mt-1 text-sm text-slate-200">{detailsOrder.customer_phone || '-'}</div>
+                <div className="mt-3 text-sm font-semibold text-white">Entrega</div>
+                <div className="mt-1 text-sm text-slate-200">{detailsOrder.delivery_kind || '-'}</div>
+                <div className="mt-1 text-sm text-slate-200">{detailsOrder.delivery_zone_name || '-'}</div>
+                <div className="mt-1 text-sm text-slate-200">{detailsOrder.delivery_address || '-'}</div>
+                <div className="mt-1 text-sm text-slate-200">Taxa: {Number(detailsOrder.delivery_fee || 0).toFixed(2)}</div>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
               <div className="text-sm text-slate-200">
                 Status: <span className="font-semibold text-white">{fmtStatus(detailsOrder.status)}</span>
@@ -485,13 +516,23 @@ export default function OrdersPage() {
           <div className="text-sm text-slate-200">
             {confirmKind === 'delete' ? (
               <>
-                Tem certeza que deseja excluir o pedido <span className="font-semibold text-white">Mesa {confirmOrder?.table_number}</span> ·{' '}
-                <span className="font-semibold text-white">Cliente {confirmOrder?.seat_number}</span>?
+                Tem certeza que deseja excluir o pedido{' '}
+                <span className="font-semibold text-white">
+                  {String(confirmOrder?.order_type || '').toLowerCase() === 'delivery'
+                    ? 'Delivery'
+                    : `Mesa ${confirmOrder?.table_number} · Cliente ${confirmOrder?.seat_number}`}
+                </span>
+                ?
               </>
             ) : (
               <>
-                Tem certeza que deseja cancelar o pedido <span className="font-semibold text-white">Mesa {confirmOrder?.table_number}</span> ·{' '}
-                <span className="font-semibold text-white">Cliente {confirmOrder?.seat_number}</span>?
+                Tem certeza que deseja cancelar o pedido{' '}
+                <span className="font-semibold text-white">
+                  {String(confirmOrder?.order_type || '').toLowerCase() === 'delivery'
+                    ? 'Delivery'
+                    : `Mesa ${confirmOrder?.table_number} · Cliente ${confirmOrder?.seat_number}`}
+                </span>
+                ?
               </>
             )}
           </div>

@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { getMe } from '../api/auth.js'
 import { getMyBranch, listBranches, switchMyBranch } from '../api/branches.js'
 import { listEstablishments, switchMyEstablishment } from '../api/establishments.js'
+import { listOrders } from '../api/orders.js'
 import { useAuthStore } from '../store/authStore.js'
 
 const nav = [
@@ -68,6 +69,9 @@ export default function DashboardLayout() {
   const bumpContext = useAuthStore((s) => s.bumpContext)
   const logout = useAuthStore((s) => s.logout)
 
+  const [hasNewOrders, setHasNewOrders] = useState(false)
+  const [latestOrderId, setLatestOrderId] = useState(null)
+
   const role = (me?.role || '').toString().trim().toLowerCase()
   const isCashier = role === 'cashier'
   const canSwitchBranch = role === 'admin' || role === 'owner'
@@ -78,6 +82,69 @@ export default function DashboardLayout() {
   const isBar = bt === 'bar'
   const isPharmacy = bt === 'pharmacy'
   const isReprography = bt === 'reprography' || bt === 'reprografia'
+
+  useEffect(() => {
+    if (!token) {
+      setHasNewOrders(false)
+      setLatestOrderId(null)
+      return
+    }
+    if (!isRestaurant) {
+      setHasNewOrders(false)
+      setLatestOrderId(null)
+      return
+    }
+
+    let disposed = false
+    let timer = null
+
+    const getKey = () => {
+      const bid = branch?.id != null ? String(Number(branch.id)) : '0'
+      return `neoerp_last_seen_order_id_branch_${bid}`
+    }
+
+    const tick = async () => {
+      try {
+        const rows = await listOrders({ status: 'open', limit: 1, offset: 0 })
+        const id = rows?.[0]?.id != null ? Number(rows[0].id) : null
+        if (disposed) return
+        setLatestOrderId(id)
+        if (id == null) {
+          setHasNewOrders(false)
+          return
+        }
+        const seenRaw = window.localStorage.getItem(getKey())
+        const seen = seenRaw != null ? Number(seenRaw) : 0
+        setHasNewOrders(Number.isFinite(seen) ? id > seen : true)
+      } catch {
+        if (disposed) return
+      }
+    }
+
+    tick()
+    timer = window.setInterval(tick, 12000)
+    return () => {
+      disposed = true
+      if (timer) window.clearInterval(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isRestaurant, branch?.id])
+
+  useEffect(() => {
+    if (!isRestaurant) return
+    if (!location?.pathname?.startsWith('/orders')) return
+    if (latestOrderId == null) {
+      setHasNewOrders(false)
+      return
+    }
+    try {
+      const bid = branch?.id != null ? String(Number(branch.id)) : '0'
+      window.localStorage.setItem(`neoerp_last_seen_order_id_branch_${bid}`, String(Number(latestOrderId)))
+    } catch {
+      // ignore
+    }
+    setHasNewOrders(false)
+  }, [location?.pathname, latestOrderId, isRestaurant, branch?.id])
 
   useEffect(() => {
     let mounted = true
@@ -177,11 +244,18 @@ export default function DashboardLayout() {
                       (isActive ||
                       (item.to === '/reprography/printers' && location.pathname.startsWith('/reprography/')))
                         ? 'bg-brand-600 text-white shadow-sm'
-                        : 'text-slate-200 bg-slate-900 hover:bg-slate-800 hover:text-white'
+                        : item.to === '/orders' && hasNewOrders
+                          ? 'bg-rose-600 text-white shadow-sm animate-pulse hover:bg-rose-500'
+                          : 'text-slate-200 bg-slate-900 hover:bg-slate-800 hover:text-white'
                     }`
                   }
                 >
-                  {item.label}
+                  <span className="flex items-center justify-between gap-3">
+                    <span>{item.label}</span>
+                    {item.to === '/orders' && hasNewOrders ? (
+                      <span className="h-2.5 w-2.5 rounded-full bg-rose-200 shadow-[0_0_0_6px_rgba(244,63,94,0.14)]" />
+                    ) : null}
+                  </span>
                 </NavLink>
               ))}
           </nav>
@@ -207,11 +281,14 @@ export default function DashboardLayout() {
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700"
+                className="lg:hidden p-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 relative"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
+                {isRestaurant && hasNewOrders ? (
+                  <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-rose-500 shadow-[0_0_0_6px_rgba(244,63,94,0.18)] animate-pulse" />
+                ) : null}
               </button>
 
               <div className="min-w-0 flex-1 lg:flex-none lg:ml-0">
