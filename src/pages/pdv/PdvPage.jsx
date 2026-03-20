@@ -45,6 +45,14 @@ function Modal({ open, title, children, onClose }) {
   )
 }
 
+function parseDecimal(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return NaN
+  const normalized = raw.replace(',', '.')
+  const n = Number(normalized)
+  return Number.isFinite(n) ? n : NaN
+}
+
 export default function PdvPage() {
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
 
@@ -385,7 +393,7 @@ export default function PdvPage() {
 
   async function loadCategories(bt = businessType) {
     try {
-      const rows = await listProductCategories({ businessType: bt })
+      const rows = await listProductCategories()
       setCategories(rows || [])
     } catch {
       setCategories([])
@@ -674,12 +682,12 @@ export default function PdvPage() {
   function setQty(productId, qty) {
     setCart((prev) => {
       const next = { ...(prev || {}) }
-      const qn = Number(qty || 0)
-      if (!qn) {
+      const qn = typeof qty === 'number' ? qty : parseDecimal(qty)
+      if (!Number.isFinite(qn) || qn <= 0) {
         delete next[productId]
-      } else {
-        next[productId] = qn
+        return next
       }
+      next[productId] = qn
       return next
     })
   }
@@ -1355,7 +1363,7 @@ export default function PdvPage() {
                             <input
                               value={String(l.qty)}
                               onChange={(e) => {
-                                const n = Number(e.target.value)
+                                const n = parseDecimal(e.target.value)
                                 setQty(l.product.id, Number.isFinite(n) ? n : l.qty)
                               }}
                               className="w-16 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
@@ -1628,7 +1636,7 @@ export default function PdvPage() {
                         <input
                           value={String(l.qty)}
                           onChange={(e) => {
-                            const n = Number(e.target.value)
+                            const n = parseDecimal(e.target.value)
                             setQty(l.product.id, Number.isFinite(n) ? n : l.qty)
                           }}
                           className="w-16 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"

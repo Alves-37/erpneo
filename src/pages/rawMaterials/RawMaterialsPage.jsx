@@ -100,6 +100,8 @@ export default function RawMaterialsPage() {
       { value: 'un', label: 'Unidade' },
       { value: 'kg', label: 'Kg' },
       { value: 'g', label: 'Gramas' },
+      { value: 'm', label: 'Metro' },
+      { value: 'cm', label: 'Centímetro' },
       { value: 'lt', label: 'Litro' },
       { value: 'ml', label: 'Mililitro' },
       { value: 'cx', label: 'Caixa' },

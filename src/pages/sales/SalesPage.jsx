@@ -6,6 +6,9 @@ import { getDashboardSummary } from '../../api/dashboard.js'
 import { listEstablishments } from '../../api/establishments.js'
 import { issueFiscalDocumentFromSale, listFiscalDocumentsBySaleId } from '../../api/fiscalDocuments.js'
 import { listSales } from '../../api/sales.js'
+import { closeCashSession, downloadCashSessionClosePdf, getCurrentCashSession, getCashSessionSummary, openCashSession } from '../../api/cashSessions.js'
+import { createExpense, payExpense } from '../../api/expenses.js'
+import { listExpenseCategories } from '../../api/expenseCategories.js'
 import { useAuthStore } from '../../store/authStore.js'
 import { toast } from '../../services/toast.js'
 
@@ -35,6 +38,14 @@ function Modal({ open, title, children, onClose }) {
       </div>
     </div>
   )
+}
+
+function parseDecimal(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return NaN
+  const normalized = raw.replace(',', '.')
+  const n = Number(normalized)
+  return Number.isFinite(n) ? n : NaN
 }
 
 export default function SalesPage() {
@@ -78,6 +89,41 @@ export default function SalesPage() {
   const [saleDocsLoading, setSaleDocsLoading] = useState(false)
   const [saleDocs, setSaleDocs] = useState([])
 
+  const [cashSession, setCashSession] = useState(null)
+  const [cashLoading, setCashLoading] = useState(false)
+  const [openCashOpen, setOpenCashOpen] = useState(false)
+  const [cashOpeningBalance, setCashOpeningBalance] = useState('')
+  const [openCashClose, setOpenCashClose] = useState(false)
+  const [cashClosingCounted, setCashClosingCounted] = useState('')
+  const [cashClosingNotes, setCashClosingNotes] = useState('')
+  const [cashSummary, setCashSummary] = useState(null)
+
+  const [expenseCategories, setExpenseCategories] = useState([])
+  const [openExpenseModal, setOpenExpenseModal] = useState(false)
+  const [expenseSaving, setExpenseSaving] = useState(false)
+  const [expenseForm, setExpenseForm] = useState({
+    description: '',
+    amount: '',
+    category_id: '',
+  })
+
+  function addExpenseAmount(delta) {
+    const current = Number.isFinite(parseDecimal(expenseForm.amount)) ? parseDecimal(expenseForm.amount) : 0
+    const next = Math.max(0, Math.round((current + delta) * 100) / 100)
+    setExpenseForm({ ...expenseForm, amount: next ? String(next) : '' })
+  }
+
+  async function refreshCashSession() {
+    try {
+      const row = await getCurrentCashSession()
+      setCashSession(row || null)
+      return row || null
+    } catch {
+      setCashSession(null)
+      return null
+    }
+  }
+
   async function refresh() {
     setLoading(true)
     try {
@@ -107,6 +153,19 @@ export default function SalesPage() {
 
   useEffect(() => {
     refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branch?.id, contextVersion, establishment?.id])
+
+  useEffect(() => {
+    refreshCashSession()
+    ;(async () => {
+      try {
+        const cats = await listExpenseCategories()
+        setExpenseCategories(Array.isArray(cats) ? cats : [])
+      } catch {
+        setExpenseCategories([])
+      }
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branch?.id, contextVersion, establishment?.id])
 
@@ -288,13 +347,56 @@ export default function SalesPage() {
           <div className="text-lg sm:text-xl font-semibold">Vendas</div>
           <div className="mt-1 text-sm text-slate-300">Histórico e resumo</div>
         </div>
-        <button
-          type="button"
-          onClick={refresh}
-          className="w-full sm:w-auto rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
-        >
-          Atualizar
-        </button>
+        <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+          <button
+            type="button"
+            disabled={cashLoading}
+            onClick={async () => {
+              const cs = await refreshCashSession()
+              if (cs?.id) {
+                try {
+                  const s = await getCashSessionSummary(Number(cs.id))
+                  setCashSummary(s || null)
+                } catch {
+                  setCashSummary(null)
+                }
+                setCashClosingCounted('')
+                setCashClosingNotes('')
+                setOpenCashClose(true)
+              } else {
+                setCashOpeningBalance('')
+                setOpenCashOpen(true)
+              }
+            }}
+            className={`w-full sm:w-auto rounded-xl border ${cashSession?.id ? 'border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50 text-emerald-200' : 'border-amber-900/60 bg-amber-950/30 hover:bg-amber-950/50 text-amber-200'} px-4 py-2.5 text-sm font-semibold disabled:opacity-60`}
+            title={cashSession?.id ? 'Caixa aberto' : 'Caixa fechado'}
+          >
+            {cashSession?.id ? 'Fechar caixa' : 'Abrir caixa'}
+          </button>
+
+          <button
+            type="button"
+            disabled={!cashSession?.id}
+            onClick={() => {
+              setExpenseForm({ description: '', amount: '', category_id: '' })
+              setOpenExpenseModal(true)
+            }}
+            className="w-full sm:w-auto rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
+            title={!cashSession?.id ? 'Abra o caixa para registrar despesa' : 'Registrar despesa (saída)'}
+          >
+            Registrar despesa
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              await Promise.all([refresh(), refreshCashSession()])
+            }}
+            className="w-full sm:w-auto rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
+          >
+            Atualizar
+          </button>
+        </div>
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -851,6 +953,297 @@ export default function SalesPage() {
             ) : (
               <div className="text-sm text-slate-400">Ainda não há documentos emitidos para esta venda.</div>
             )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openCashOpen}
+        title="Abrir caixa"
+        onClose={() => {
+          if (!cashLoading) setOpenCashOpen(false)
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-200">Informe o fundo de caixa (troco inicial).</div>
+          <label className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-400">Valor de abertura</div>
+            <input
+              value={cashOpeningBalance}
+              onChange={(e) => setCashOpeningBalance(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              inputMode="decimal"
+              placeholder="0.00"
+              type="text"
+            />
+          </label>
+
+          <button
+            type="button"
+            disabled={cashLoading}
+            onClick={async () => {
+              const n = parseDecimal(cashOpeningBalance)
+              if (!Number.isFinite(n) || n < 0) {
+                toast.error('Valor de abertura inválido.')
+                return
+              }
+              try {
+                setCashLoading(true)
+                const row = await openCashSession({ opening_balance: n })
+                setCashSession(row || null)
+                setOpenCashOpen(false)
+                toast.success('Caixa aberto.')
+              } catch (err) {
+                const msg = err?.response?.data?.detail || 'Não foi possível abrir o caixa agora.'
+                toast.error(msg)
+              } finally {
+                setCashLoading(false)
+              }
+            }}
+            className="w-full rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {cashLoading ? 'Abrindo...' : 'Abrir caixa'}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openCashClose}
+        title="Fechar caixa"
+        onClose={() => {
+          if (!cashLoading) setOpenCashClose(false)
+        }}
+      >
+        <div className="grid gap-4">
+          {cashSummary ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-sm">
+              <div className="flex items-center justify-between text-slate-300">
+                <div>Esperado (dinheiro)</div>
+                <div className="font-semibold text-white">{Number(cashSummary.expected_cash || 0).toFixed(2)} MZN</div>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <div className="text-slate-400">Vendas (dinheiro)</div>
+                <div className="text-right text-slate-200">{Number(cashSummary.cash_sales_total || 0).toFixed(2)} MZN</div>
+                <div className="text-slate-400">Despesas (dinheiro)</div>
+                <div className="text-right text-slate-200">{Number(cashSummary.cash_expenses_total || 0).toFixed(2)} MZN</div>
+              </div>
+            </div>
+          ) : null}
+
+          <label className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-400">Valor contado</div>
+            <input
+              value={cashClosingCounted}
+              onChange={(e) => setCashClosingCounted(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              inputMode="decimal"
+              placeholder="0.00"
+              type="text"
+            />
+          </label>
+
+          <label className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-400">Observações (opcional)</div>
+            <input
+              value={cashClosingNotes}
+              onChange={(e) => setCashClosingNotes(e.target.value)}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              placeholder="Ex: sangria, diferença, etc."
+              type="text"
+            />
+          </label>
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              disabled={cashLoading}
+              onClick={() => setOpenCashClose(false)}
+              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              disabled={cashLoading || !cashSession?.id}
+              onClick={async () => {
+                const n = parseDecimal(cashClosingCounted)
+                if (!Number.isFinite(n) || n < 0) {
+                  toast.error('Valor contado inválido.')
+                  return
+                }
+                try {
+                  setCashLoading(true)
+                  await closeCashSession(Number(cashSession.id), {
+                    closing_balance_counted: n,
+                    notes: String(cashClosingNotes || '').trim() || null,
+                  })
+                  toast.success('Caixa fechado.')
+
+                  // Download PDF do backend (igual PDV3)
+                  try {
+                    await downloadCashSessionClosePdf(Number(cashSession.id))
+                  } catch (pdfErr) {
+                    console.error('Erro ao baixar PDF:', pdfErr)
+                    toast.error('PDF não foi gerado, mas caixa foi fechado.')
+                  }
+
+                  setOpenCashClose(false)
+                  setCashSession(null)
+                  setCashSummary(null)
+                } catch (err) {
+                  const msg = err?.response?.data?.detail || 'Não foi possível fechar o caixa agora.'
+                  toast.error(msg)
+                } finally {
+                  setCashLoading(false)
+                }
+              }}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {cashLoading ? 'Fechando...' : 'Fechar caixa'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openExpenseModal}
+        title="Registrar despesa"
+        onClose={() => {
+          if (!expenseSaving) setOpenExpenseModal(false)
+        }}
+      >
+        <div className="grid gap-4">
+          <label className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-400">Descrição</div>
+            <input
+              value={expenseForm.description}
+              onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              placeholder="Ex: compra urgente, transporte, etc."
+              type="text"
+            />
+          </label>
+
+          <div>
+            <div className="text-xs font-semibold text-slate-400">Valor (MZN)</div>
+            <input
+              value={expenseForm.amount}
+              onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+              className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              inputMode="decimal"
+              placeholder="0.00"
+              type="text"
+            />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => addExpenseAmount(50)}
+                className="rounded-lg px-3 py-1.5 text-xs border border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-800"
+              >
+                +50
+              </button>
+              <button
+                type="button"
+                onClick={() => addExpenseAmount(100)}
+                className="rounded-lg px-3 py-1.5 text-xs border border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-800"
+              >
+                +100
+              </button>
+              <button
+                type="button"
+                onClick={() => addExpenseAmount(500)}
+                className="rounded-lg px-3 py-1.5 text-xs border border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-800"
+              >
+                +500
+              </button>
+              <button
+                type="button"
+                onClick={() => addExpenseAmount(1000)}
+                className="rounded-lg px-3 py-1.5 text-xs border border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-800"
+              >
+                +1000
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpenseForm({ ...expenseForm, amount: '' })}
+                className="rounded-lg px-3 py-1.5 text-xs border border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-800"
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+
+          <label className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-400">Categoria (opcional)</div>
+            <select
+              value={expenseForm.category_id}
+              onChange={(e) => setExpenseForm({ ...expenseForm, category_id: e.target.value })}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            >
+              <option value="">Sem categoria</option>
+              {(expenseCategories || []).map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              disabled={expenseSaving}
+              onClick={() => setOpenExpenseModal(false)}
+              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={expenseSaving || !cashSession?.id}
+              onClick={async () => {
+                const description = String(expenseForm.description || '').trim()
+                const amount = parseDecimal(expenseForm.amount)
+                const category_id = expenseForm.category_id ? Number(expenseForm.category_id) : null
+
+                if (!description) {
+                  toast.error('Descrição é obrigatória.')
+                  return
+                }
+                if (!Number.isFinite(amount) || amount <= 0) {
+                  toast.error('Valor inválido.')
+                  return
+                }
+                if (!cashSession?.id) {
+                  toast.error('Abra o caixa para registrar a despesa.')
+                  return
+                }
+
+                try {
+                  setExpenseSaving(true)
+                  const today = new Date()
+                  const dueDate = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString().slice(0, 10)
+                  const created = await createExpense({
+                    description,
+                    amount,
+                    due_date: dueDate,
+                    category_id,
+                  })
+                  await payExpense(Number(created.id), {})
+                  toast.success('Despesa registrada no caixa.')
+                  setOpenExpenseModal(false)
+                  await refreshCashSession()
+                } catch (err) {
+                  const msg = err?.response?.data?.detail || 'Não foi possível registrar a despesa agora.'
+                  toast.error(msg)
+                } finally {
+                  setExpenseSaving(false)
+                }
+              }}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {expenseSaving ? 'Registrando...' : 'Registrar'}
+            </button>
           </div>
         </div>
       </Modal>

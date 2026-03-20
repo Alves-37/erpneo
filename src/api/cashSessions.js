@@ -22,3 +22,27 @@ export async function getCashSessionSummary(cashSessionId) {
   const res = await apiClient.get(`/cash-sessions/${cashSessionId}/summary`)
   return res.data
 }
+
+export async function downloadCashSessionClosePdf(cashSessionId) {
+  const res = await apiClient.get(`/cash-sessions/${cashSessionId}/close-pdf`, {
+    responseType: 'blob',
+  })
+  
+  // Criar URL do blob e fazer download
+  const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+  const link = document.createElement('a')
+  link.href = url
+  
+  // Extrair filename do header ou usar default
+  const contentDisposition = res.headers?.['content-disposition'] || ''
+  const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/)
+  const filename = filenameMatch ? filenameMatch[1] : `fechamento_caixa_${cashSessionId}.pdf`
+  
+  link.setAttribute('download', filename)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
+  
+  return res.data
+}

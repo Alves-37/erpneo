@@ -64,7 +64,7 @@ export default function CategoriesPage() {
       }
       const b = await getMyBranch()
       setBranch(b)
-      const rows = await listProductCategories({ businessType: b?.business_type || 'retail' })
+      const rows = await listProductCategories()
       setItems(rows || [])
     } catch {
       setItems([])
@@ -96,7 +96,7 @@ export default function CategoriesPage() {
         await updateProductCategory(editing.id, { name: name.trim(), color: color || null })
         toast.success('Categoria atualizada.')
       } else {
-        await createProductCategory({ name: name.trim(), businessType, color: color || null })
+        await createProductCategory({ name: name.trim(), color: color || null })
         toast.success('Categoria criada.')
       }
       setOpenModal(false)

@@ -232,7 +232,8 @@ export default function DashboardLayout() {
                   item.to === '/returns' ||
                   item.to === '/pdv' ||
                   item.to === '/orders' ||
-                  item.to === '/tables'
+                  item.to === '/tables' ||
+                  item.to === '/finance'
                 )
               })
               .map((item) => (

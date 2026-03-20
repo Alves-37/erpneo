@@ -175,6 +175,8 @@ export default function ProductsPage() {
       { value: 'un', label: 'Unidade' },
       { value: 'kg', label: 'Kg' },
       { value: 'g', label: 'Gramas' },
+      { value: 'm', label: 'Metro' },
+      { value: 'cm', label: 'Centímetro' },
       { value: 'lt', label: 'Litro' },
       { value: 'ml', label: 'Mililitro' },
       { value: 'cx', label: 'Caixa' },
@@ -183,9 +185,9 @@ export default function ProductsPage() {
     ]
   }, [businessType])
 
-  async function loadCategories(bt = businessType) {
+  async function loadCategories() {
     try {
-      const rows = await listProductCategories({ businessType: bt })
+      const rows = await listProductCategories()
       setCategories(rows || [])
     } catch {
       setCategories([])
@@ -280,7 +282,7 @@ export default function ProductsPage() {
         setCompany(c)
       }
 
-      await loadCategories(b?.business_type || 'retail')
+      await loadCategories()
     } catch {
       toast.error('Não foi possível carregar produtos agora.')
     } finally {
@@ -309,7 +311,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     if (!token) return
-    loadCategories(businessType)
+    loadCategories()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, businessType])
 
