@@ -18,6 +18,7 @@ import { listSuppliers } from '../../api/suppliers.js'
 import { listStockLocations } from '../../api/stockLocations.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
+import { makeProductsCacheKey, useProductStore } from '../../store/productStore.js'
 
 function numericProps() {
   return {
@@ -57,7 +58,8 @@ function Modal({ open, title, children, onClose }) {
 
 export default function ProductsPage() {
   const [company, setCompany] = useState(null)
-  const [branch, setBranch] = useState(null)
+  const branchGlobal = useAuthStore((s) => s.branch)
+  const [branch, setBranch] = useState(branchGlobal || null)
   const businessType = branch?.business_type || 'retail'
   const isRestaurant = businessType === 'restaurant'
   const isBar = businessType === 'bar'
@@ -70,6 +72,9 @@ export default function ProductsPage() {
 
   const token = useAuthStore((s) => s.token)
   const contextVersion = useAuthStore((s) => s.contextVersion)
+
+  const productCache = useProductStore((s) => s.cache)
+  const setProductCache = useProductStore((s) => s.setCache)
 
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
 
@@ -136,6 +141,43 @@ export default function ProductsPage() {
     for (const p of items || []) map.set(Number(p.id), p)
     return map
   }, [items])
+
+  const visibleItems = useMemo(() => {
+    const query = String(q || '').trim().toLowerCase()
+    const catId = filterCategoryId ? Number(filterCategoryId) : null
+
+    let out = items || []
+
+    if (query) {
+      out = out.filter((p) => {
+        const name = String(p?.name || '').toLowerCase()
+        const sku = String(p?.sku || '').toLowerCase()
+        const barcode = String(p?.barcode || '').toLowerCase()
+        return name.includes(query) || sku.includes(query) || barcode.includes(query)
+      })
+    }
+
+    if (catId) {
+      out = out.filter((p) => Number(p?.category_id || 0) === catId)
+    }
+
+    if (showInactiveOnly) {
+      out = out.filter((p) => p?.is_active === false)
+    } else {
+      out = out.filter((p) => p?.is_active !== false)
+    }
+
+    if (onlyLowStock && !showInactiveOnly) {
+      out = out.filter((p) => {
+        const min = Number(p?.min_stock || 0)
+        const qty = Number(p?.stock_qty || 0)
+        if (!Number.isFinite(min) || !Number.isFinite(qty)) return false
+        return qty <= min
+      })
+    }
+
+    return out
+  }, [items, q, filterCategoryId, showInactiveOnly, onlyLowStock])
 
   const [establishments, setEstablishments] = useState([])
   const establishmentsById = useMemo(() => {
@@ -247,7 +289,7 @@ export default function ProductsPage() {
     return Number(categoryId) === Number(serviceCategoryId)
   }, [categoryMode, categoryId, categoryName, serviceCategoryId])
 
-  async function load({ silent = false } = {}) {
+  async function load({ silent = false, force = false } = {}) {
     if (!silent) setLoading(true)
     try {
       if (!token) {
@@ -266,15 +308,34 @@ export default function ProductsPage() {
         points = []
       }
 
-      const products = await listProducts({
-        q,
-        low_stock: onlyLowStock && !showInactiveOnly,
-        is_active: showInactiveOnly ? false : true,
-        establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
-        category_id: filterCategoryId ? Number(filterCategoryId) : undefined,
-        show_in_menu: isRestaurant ? true : undefined,
+      const nextKey = makeProductsCacheKey({
+        companyId: me?.company_id,
+        branchId: b?.id,
+        establishmentId: isAdmin ? establishment?.id : null,
+        scope: 'products',
       })
-      setItems(products || [])
+
+      const cached = productCache?.[nextKey]
+      if (!force && cached?.items) {
+        setItems(cached.items || [])
+      } else {
+        const pageSize = 500
+        const all = []
+        for (let offset = 0; offset < 5000; offset += pageSize) {
+          const rows = await listProducts({
+            limit: pageSize,
+            offset,
+            is_active: undefined,
+            establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
+            show_in_menu: isRestaurant ? true : undefined,
+          })
+          const batch = Array.isArray(rows) ? rows : []
+          all.push(...batch)
+          if (batch.length < pageSize) break
+        }
+        setItems(all)
+        setProductCache(nextKey, { items: all, savedAt: Date.now() })
+      }
 
       if (!company) {
         const companies = await listCompanies()
@@ -305,9 +366,32 @@ export default function ProductsPage() {
   }, [allowsImages, items])
 
   useEffect(() => {
-    load()
+    if (!token) {
+      setItems([])
+      setLoading(false)
+      return
+    }
+
+    const b = branchGlobal || branch
+    if (b?.id) {
+      const key = makeProductsCacheKey({
+        companyId: me?.company_id,
+        branchId: b.id,
+        establishmentId: isAdmin ? establishment?.id : null,
+        scope: 'products',
+      })
+      const cached = productCache?.[key]
+      if (cached?.items) {
+        setBranch(b)
+        setItems(cached.items || [])
+        setLoading(false)
+        return
+      }
+    }
+
+    load({ force: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, contextVersion])
+  }, [token, contextVersion, branchGlobal?.id, establishment?.id])
 
   useEffect(() => {
     if (!token) return
@@ -336,28 +420,7 @@ export default function ProductsPage() {
   }, [token, company?.id])
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      load({ silent: true })
-    }, 300)
-
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q])
-
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onlyLowStock])
-
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCategoryId])
-
-  useEffect(() => {
     if (showInactiveOnly) setOnlyLowStock(false)
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showInactiveOnly])
 
   function resetForm() {
@@ -654,6 +717,14 @@ export default function ProductsPage() {
             Tipo de estabelecimento: <span className="text-slate-100">{businessType}</span>
           </div>
         </div>
+
+        <button
+          onClick={() => load({ force: true })}
+          className="self-start rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-100"
+          type="button"
+        >
+          Atualizar
+        </button>
       </div>
 
       <div className="mt-6 grid gap-3">
@@ -749,9 +820,9 @@ export default function ProductsPage() {
         <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-4">
           {loading ? (
             <div className="py-6 text-sm text-slate-300">Carregando...</div>
-          ) : items.length ? (
+          ) : visibleItems.length ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {items.map((p) => {
+              {visibleItems.map((p) => {
                 const rawUrl = imageByProductId?.[p.id] || null
                 const url = rawUrl && rawUrl.startsWith('/') ? `${apiBaseUrl}${rawUrl}` : rawUrl
                 return (
@@ -810,8 +881,8 @@ export default function ProductsPage() {
         <div className="mt-4 md:hidden rounded-2xl border border-slate-800 bg-slate-900 divide-y divide-slate-800">
           {loading ? (
             <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
-          ) : items.length ? (
-            items.map((p) => (
+          ) : visibleItems.length ? (
+            visibleItems.map((p) => (
               <div key={p.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

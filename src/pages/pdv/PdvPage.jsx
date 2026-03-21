@@ -16,6 +16,7 @@ import { createCustomer, listCustomers } from '../../api/customers.js'
 import { downloadQuotePdf } from '../../api/quotes.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
+import { makeProductsCacheKey, useProductStore } from '../../store/productStore.js'
 
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
@@ -61,9 +62,14 @@ export default function PdvPage() {
   const bumpContext = useAuthStore((s) => s.bumpContext)
   const contextVersion = useAuthStore((s) => s.contextVersion)
   const establishment = useAuthStore((s) => s.establishment)
+  const branchGlobal = useAuthStore((s) => s.branch)
+  const token = useAuthStore((s) => s.token)
+
+  const productCache = useProductStore((s) => s.cache)
+  const setProductCache = useProductStore((s) => s.setCache)
 
   const [company, setCompany] = useState(null)
-  const [branch, setBranch] = useState(null)
+  const [branch, setBranch] = useState(branchGlobal || null)
   const businessType = branch?.business_type || 'retail'
   const isRestaurant = businessType === 'restaurant'
   const isPharmacy = businessType === 'pharmacy'
@@ -400,16 +406,32 @@ export default function PdvPage() {
     }
   }
 
-  async function loadProducts(query = q) {
+  async function loadProducts(query = q, { force = false, branchId } = {}) {
     const role = (me?.role || '').toString().trim().toLowerCase()
     const isAdmin = role === 'admin' || role === 'owner'
+
+    const cacheKey = makeProductsCacheKey({
+      companyId: me?.company_id,
+      branchId: branchId != null ? branchId : branch?.id,
+      establishmentId: isAdmin ? establishment?.id : null,
+      scope: 'pdv',
+    })
+
+    const cached = productCache?.[cacheKey]
+    if (!force && cached?.items && cached?.query === String(query || '')) {
+      setItems(cached.items || [])
+      return
+    }
+
     const products = await listProducts({
       q: query,
       is_active: true,
       in_stock: true,
       establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
     })
-    setItems(products || [])
+    const next = products || []
+    setItems(next)
+    setProductCache(cacheKey, { items: next, query: String(query || ''), savedAt: Date.now() })
   }
 
   async function loadInitial() {
@@ -421,7 +443,7 @@ export default function PdvPage() {
       setBranch(b)
       setBranchGlobal(b, { persist: true })
       await loadCategories(b?.business_type || 'retail')
-      await loadProducts('')
+      await loadProducts('', { force: false, branchId: b?.id })
     } catch {
       toast.error('Não foi possível carregar o PDV agora.')
     } finally {
@@ -453,39 +475,37 @@ export default function PdvPage() {
   }
 
   useEffect(() => {
+    if (!token) {
+      setItems([])
+      setLoading(false)
+      return
+    }
+
+    const b = branchGlobal || branch
+    if (b?.id) {
+      const key = makeProductsCacheKey({
+        companyId: me?.company_id,
+        branchId: b.id,
+        establishmentId: null,
+        scope: 'pdv',
+      })
+      const cached = productCache?.[key]
+      if (cached?.items) {
+        setBranch(b)
+        setItems(cached.items || [])
+        setLoading(false)
+        return
+      }
+    }
+
     loadInitial()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [token, contextVersion, branchGlobal?.id])
 
   useEffect(() => {
     refreshCashSession()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branch?.id, isTableOrder, contextVersion])
-
-  useEffect(() => {
-    ;(async () => {
-      try {
-        await loadProducts(q)
-      } catch {
-        setItems([])
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextVersion, establishment?.id])
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      ;(async () => {
-        try {
-          await loadProducts(q)
-        } catch {
-          setItems([])
-        }
-      })()
-    }, 250)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q])
 
   useEffect(() => {
     const query = String(q || '').trim()
