@@ -131,7 +131,18 @@ export async function getPdv3PrintersBilling({ year, month, establishment_id } =
   return res.data
 }
 
-export async function generatePdv3PrintersBillingLaunch({ printer_id, year, month, establishment_id, price_per_copy, cost_per_copy } = {}) {
+export async function generatePdv3PrintersBillingLaunch({
+  printer_id,
+  year,
+  month,
+  establishment_id,
+  price_per_copy,
+  cost_per_copy,
+  as_debt = false,
+  customer_id,
+  customer_name,
+  customer_nuit,
+} = {}) {
   const res = await apiClient.post('/printers/pdv3/billing/generate-launch', {
     printer_id: Number(printer_id),
     year: Number(year),
@@ -139,6 +150,10 @@ export async function generatePdv3PrintersBillingLaunch({ printer_id, year, mont
     establishment_id: establishment_id != null ? Number(establishment_id) : undefined,
     price_per_copy: Number(price_per_copy),
     cost_per_copy: cost_per_copy != null ? Number(cost_per_copy) : 0,
+    as_debt: as_debt ? true : false,
+    customer_id: customer_id != null && customer_id !== '' ? Number(customer_id) : undefined,
+    customer_name: customer_name != null && String(customer_name).trim() ? String(customer_name).trim() : undefined,
+    customer_nuit: customer_nuit != null && String(customer_nuit).trim() ? String(customer_nuit).trim() : undefined,
   })
   return res.data
 }
@@ -154,12 +169,25 @@ export async function getPrintersBilling({ year, month, establishment_id } = {})
   return res.data
 }
 
-export async function generatePrintersBillingLaunch({ year, month, establishment_id, include_zero = false } = {}) {
+export async function generatePrintersBillingLaunch({
+  year,
+  month,
+  establishment_id,
+  include_zero = false,
+  as_debt = false,
+  customer_id,
+  customer_name,
+  customer_nuit,
+} = {}) {
   const res = await apiClient.post('/printers/billing/generate-launch', {
     year: Number(year),
     month: Number(month),
     establishment_id: establishment_id != null ? Number(establishment_id) : undefined,
     include_zero: include_zero ? true : false,
+    as_debt: as_debt ? true : false,
+    customer_id: customer_id != null && customer_id !== '' ? Number(customer_id) : undefined,
+    customer_name: customer_name != null && String(customer_name).trim() ? String(customer_name).trim() : undefined,
+    customer_nuit: customer_nuit != null && String(customer_nuit).trim() ? String(customer_nuit).trim() : undefined,
   })
   return res.data
 }

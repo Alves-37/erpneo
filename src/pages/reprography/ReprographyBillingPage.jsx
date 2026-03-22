@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { listCustomers } from '../../api/customers.js'
 import { generatePdv3PrintersBillingLaunch, getPdv3PrintersBilling } from '../../api/printers.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
@@ -73,6 +74,11 @@ export default function ReprographyBillingPage() {
   const [pricePerCopy, setPricePerCopy] = useState('5.00')
   const [costPerCopy, setCostPerCopy] = useState('0.00')
   const [launchTotal, setLaunchTotal] = useState('0.00')
+  const [asDebt, setAsDebt] = useState(false)
+  const [debtCustomerId, setDebtCustomerId] = useState('')
+  const [debtCustomerName, setDebtCustomerName] = useState('')
+  const [debtCustomerNuit, setDebtCustomerNuit] = useState('')
+  const [customers, setCustomers] = useState([])
 
   const [openDetails, setOpenDetails] = useState(false)
   const [detailsRow, setDetailsRow] = useState(null)
@@ -117,11 +123,21 @@ export default function ReprographyBillingPage() {
     setDetailsTotal(money(total))
   }, [detailsRow, detailsPricePerCopy])
 
-  function openLaunchModal(row) {
+  async function openLaunchModal(row) {
     setLaunchRow(row)
     setPricePerCopy('5.00')
     setCostPerCopy('0.00')
+    setAsDebt(false)
+    setDebtCustomerId('')
+    setDebtCustomerName('')
+    setDebtCustomerNuit('')
     setOpenLaunch(true)
+    try {
+      const rows = await listCustomers({ limit: 200, offset: 0 })
+      setCustomers(Array.isArray(rows) ? rows : [])
+    } catch {
+      setCustomers([])
+    }
   }
 
   function openDetailsModal(row) {
@@ -314,6 +330,55 @@ export default function ReprographyBillingPage() {
 
           <div className="text-base font-semibold text-brand-400">Valor Total: MT {launchTotal}</div>
 
+          <div className="h-px bg-slate-800" />
+          <label className="flex items-center gap-2 cursor-pointer text-slate-200">
+            <input
+              type="checkbox"
+              checked={asDebt}
+              onChange={(e) => setAsDebt(e.target.checked)}
+              className="rounded border-slate-600"
+            />
+            <span>Lançar como dívida (fiado) — não exige caixa aberto</span>
+          </label>
+          {asDebt ? (
+            <div className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+              <div>
+                <div className="text-xs font-semibold text-slate-400">Cliente cadastrado</div>
+                <select
+                  value={debtCustomerId}
+                  onChange={(e) => setDebtCustomerId(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                >
+                  <option value="">— Escolher ou preencher o nome abaixo —</option>
+                  {(customers || []).map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.name || `Cliente #${c.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-400">Nome do cliente (se não usar a lista)</div>
+                <input
+                  value={debtCustomerName}
+                  onChange={(e) => setDebtCustomerName(e.target.value)}
+                  placeholder="Obrigatório se não selecionar acima"
+                  className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                  type="text"
+                />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-400">NUIT (opcional)</div>
+                <input
+                  value={debtCustomerNuit}
+                  onChange={(e) => setDebtCustomerNuit(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                  type="text"
+                />
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
@@ -328,6 +393,14 @@ export default function ReprographyBillingPage() {
               disabled={launching || Number(launchRow?.copies_new || 0) <= 0}
               onClick={async () => {
                 if (!launchRow?.printer_id) return
+                if (asDebt) {
+                  const hasId = debtCustomerId && String(debtCustomerId).trim() !== ''
+                  const hasName = debtCustomerName && String(debtCustomerName).trim() !== ''
+                  if (!hasId && !hasName) {
+                    toast.error('Para fiado, selecione um cliente ou indique o nome.')
+                    return
+                  }
+                }
                 setLaunching(true)
                 try {
                   const res = await generatePdv3PrintersBillingLaunch({
@@ -337,8 +410,16 @@ export default function ReprographyBillingPage() {
                     establishment_id: effectiveEstId,
                     price_per_copy: numberOnly(pricePerCopy),
                     cost_per_copy: numberOnly(costPerCopy),
+                    as_debt: asDebt,
+                    customer_id: asDebt && debtCustomerId ? Number(debtCustomerId) : undefined,
+                    customer_name: asDebt && !debtCustomerId ? String(debtCustomerName || '').trim() : undefined,
+                    customer_nuit: asDebt ? String(debtCustomerNuit || '').trim() || undefined : undefined,
                   })
-                  toast.success(`Lançamento criado. Venda #${res?.sale_id || ''}`)
+                  if (res?.debt_id) {
+                    toast.success(`Dívida #${res.debt_id} registada (fiado).`)
+                  } else {
+                    toast.success(`Lançamento criado. Venda #${res?.sale_id || ''}`)
+                  }
                   setOpenLaunch(false)
                   await load()
                 } catch (err) {
