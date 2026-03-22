@@ -25,6 +25,7 @@ export default function ReprographyReadingsPage() {
 
   const role = (me?.role || '').toString().trim().toLowerCase()
   const isAdmin = role === 'admin' || role === 'owner'
+  const canRegister = isAdmin || role === 'cashier'
 
   const businessType = (branch?.business_type || 'retail').toString().trim().toLowerCase()
   const isReprography = businessType === 'reprography' || businessType === 'reprografia'
@@ -139,7 +140,7 @@ export default function ReprographyReadingsPage() {
 
   async function onSubmit(e) {
     e?.preventDefault?.()
-    if (!isAdmin) return
+    if (!canRegister) return
     if (!canSave) return
 
     const cv = Number(counterValue)
@@ -206,7 +207,7 @@ export default function ReprographyReadingsPage() {
         <div className="mt-1 text-sm text-slate-300">Nova Leitura</div>
 
         <form className="mt-4 grid gap-4" onSubmit={onSubmit}>
-          {!isAdmin ? <div className="text-sm text-amber-300">Sem permissão para registrar leituras.</div> : null}
+          {!canRegister ? <div className="text-sm text-amber-300">Sem permissão para registrar leituras.</div> : null}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
             <div className="lg:col-span-6">
@@ -236,7 +237,7 @@ export default function ReprographyReadingsPage() {
                 className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                 inputMode="numeric"
                 type="text"
-                disabled={!isAdmin || saving || !printerId}
+                disabled={!canRegister || saving || !printerId}
               />
             </div>
 
@@ -247,7 +248,7 @@ export default function ReprographyReadingsPage() {
                 onChange={(e) => setReadingDate(e.target.value)}
                 className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
                 type="date"
-                disabled={!isAdmin || saving}
+                disabled={!canRegister || saving}
               />
             </div>
           </div>
@@ -262,7 +263,7 @@ export default function ReprographyReadingsPage() {
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             <button
               type="submit"
-              disabled={!isAdmin || saving || !canSave}
+              disabled={!canRegister || saving || !canSave}
               className="rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-60 px-4 py-2.5 text-sm font-semibold text-white"
             >
               {saving ? 'Salvando...' : 'Salvar'}
