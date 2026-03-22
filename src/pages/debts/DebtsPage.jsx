@@ -5,6 +5,87 @@ import { listDebts, payDebt } from '../../api/debts.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 
+function originSourceLabel(src) {
+  const s = (src || '').toString()
+  if (s === 'printer_pdv3') return 'Faturamento impressão (PDV3)'
+  if (s === 'printer_excess') return 'Faturamento excedentes (impressoras)'
+  return s || '—'
+}
+
+function DebtOriginDetails({ debt }) {
+  const meta = debt?.origin_meta
+  const kind = meta?.kind
+  if (!debt?.origin_summary && !debt?.origin_source && !meta) return null
+
+  return (
+    <div className="mt-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Origem da dívida</div>
+      {debt.origin_source ? (
+        <div className="text-slate-300">
+          <span className="text-slate-500">Tipo: </span>
+          {originSourceLabel(debt.origin_source)}
+        </div>
+      ) : null}
+      {debt.origin_summary ? (
+        <div className="text-slate-200 leading-relaxed">{debt.origin_summary}</div>
+      ) : null}
+      {kind === 'printer_pdv3' && meta ? (
+        <ul className="grid gap-1 text-slate-400 border-t border-slate-800 pt-2">
+          <li>
+            <span className="text-slate-500">Impressora (série): </span>
+            <span className="text-slate-200 font-medium">{meta.serial_number || '—'}</span>
+          </li>
+          {(meta.brand || meta.model) ? (
+            <li>
+              <span className="text-slate-500">Marca / modelo: </span>
+              <span className="text-slate-200">{`${meta.brand || ''} ${meta.model || ''}`.trim()}</span>
+            </li>
+          ) : null}
+          <li>
+            <span className="text-slate-500">Período: </span>
+            <span className="text-slate-200">
+              {String(meta.month || '').padStart(2, '0')}/{meta.year || '—'}
+            </span>
+          </li>
+          <li>
+            <span className="text-slate-500">Cópias faturadas: </span>
+            <span className="text-slate-200">{meta.copies_new ?? '—'}</span>
+          </li>
+        </ul>
+      ) : null}
+      {kind === 'printer_excess' && Array.isArray(meta?.lines) && meta.lines.length ? (
+        <div className="border-t border-slate-800 pt-2 space-y-2">
+          <div className="text-slate-500">Detalhe por impressora / contador</div>
+          <div className="overflow-x-auto rounded-lg border border-slate-800">
+            <table className="w-full text-left text-[11px]">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500">
+                  <th className="px-2 py-1.5 font-semibold">Série</th>
+                  <th className="px-2 py-1.5 font-semibold">Contador</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">Pág. exced.</th>
+                  <th className="px-2 py-1.5 font-semibold text-right">Total linha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {meta.lines.map((ln, idx) => (
+                  <tr key={idx} className="border-b border-slate-800/80 text-slate-300">
+                    <td className="px-2 py-1.5">{ln.serial_number || `#${ln.printer_id}`}</td>
+                    <td className="px-2 py-1.5">{ln.counter_type_name || ln.counter_type_code || '—'}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{ln.excess_pages ?? '—'}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {ln.line_total != null ? Number(ln.line_total).toFixed(2) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
   return (
@@ -188,6 +269,7 @@ export default function DebtsPage() {
                         <div className="mt-1 text-xs text-slate-400">
                           Estado: <span className="text-slate-200 font-semibold">{d.status}</span>
                         </div>
+                        <DebtOriginDetails debt={d} />
                       </div>
                       <div className="shrink-0 text-sm font-semibold text-white">{fmtMoney.format(Number(d.total || 0))} MZN</div>
                     </div>
@@ -228,6 +310,12 @@ export default function DebtsPage() {
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
             <div className="text-xs font-semibold text-slate-400">Total</div>
             <div className="mt-1 text-xl font-semibold text-white">{fmtMoney.format(Number(activeDebt?.total || 0))} MZN</div>
+            {activeDebt?.customer_name ? (
+              <div className="mt-2 text-xs text-slate-400">
+                Cliente: <span className="text-slate-200 font-semibold">{activeDebt.customer_name}</span>
+              </div>
+            ) : null}
+            <DebtOriginDetails debt={activeDebt} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -76,8 +76,6 @@ export default function ReprographyBillingPage() {
   const [launchTotal, setLaunchTotal] = useState('0.00')
   const [asDebt, setAsDebt] = useState(false)
   const [debtCustomerId, setDebtCustomerId] = useState('')
-  const [debtCustomerName, setDebtCustomerName] = useState('')
-  const [debtCustomerNuit, setDebtCustomerNuit] = useState('')
   const [customers, setCustomers] = useState([])
 
   const [openDetails, setOpenDetails] = useState(false)
@@ -129,11 +127,9 @@ export default function ReprographyBillingPage() {
     setCostPerCopy('0.00')
     setAsDebt(false)
     setDebtCustomerId('')
-    setDebtCustomerName('')
-    setDebtCustomerNuit('')
     setOpenLaunch(true)
     try {
-      const rows = await listCustomers({ limit: 200, offset: 0 })
+      const rows = await listCustomers({ limit: 500, offset: 0 })
       setCustomers(Array.isArray(rows) ? rows : [])
     } catch {
       setCustomers([])
@@ -341,40 +337,27 @@ export default function ReprographyBillingPage() {
             <span>Lançar como dívida (fiado) — não exige caixa aberto</span>
           </label>
           {asDebt ? (
-            <div className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+            <div className="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/80 p-3">
               <div>
-                <div className="text-xs font-semibold text-slate-400">Cliente cadastrado</div>
+                <div className="text-xs font-semibold text-slate-400">Cliente *</div>
+                <div className="mt-1 text-xs text-slate-500">Apenas clientes já cadastrados na filial.</div>
                 <select
                   value={debtCustomerId}
                   onChange={(e) => setDebtCustomerId(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                  required
                 >
-                  <option value="">— Escolher ou preencher o nome abaixo —</option>
+                  <option value="">— Selecione o cliente —</option>
                   {(customers || []).map((c) => (
                     <option key={c.id} value={String(c.id)}>
                       {c.name || `Cliente #${c.id}`}
+                      {c.phone ? ` · ${c.phone}` : ''}
                     </option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-slate-400">Nome do cliente (se não usar a lista)</div>
-                <input
-                  value={debtCustomerName}
-                  onChange={(e) => setDebtCustomerName(e.target.value)}
-                  placeholder="Obrigatório se não selecionar acima"
-                  className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  type="text"
-                />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-slate-400">NUIT (opcional)</div>
-                <input
-                  value={debtCustomerNuit}
-                  onChange={(e) => setDebtCustomerNuit(e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                  type="text"
-                />
+                {!customers?.length ? (
+                  <div className="mt-2 text-xs text-amber-300">Não há clientes nesta filial. Cadastre-os em Clientes.</div>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -394,10 +377,8 @@ export default function ReprographyBillingPage() {
               onClick={async () => {
                 if (!launchRow?.printer_id) return
                 if (asDebt) {
-                  const hasId = debtCustomerId && String(debtCustomerId).trim() !== ''
-                  const hasName = debtCustomerName && String(debtCustomerName).trim() !== ''
-                  if (!hasId && !hasName) {
-                    toast.error('Para fiado, selecione um cliente ou indique o nome.')
+                  if (!debtCustomerId || String(debtCustomerId).trim() === '') {
+                    toast.error('Para fiado, selecione um cliente na lista.')
                     return
                   }
                 }
@@ -412,8 +393,6 @@ export default function ReprographyBillingPage() {
                     cost_per_copy: numberOnly(costPerCopy),
                     as_debt: asDebt,
                     customer_id: asDebt && debtCustomerId ? Number(debtCustomerId) : undefined,
-                    customer_name: asDebt && !debtCustomerId ? String(debtCustomerName || '').trim() : undefined,
-                    customer_nuit: asDebt ? String(debtCustomerNuit || '').trim() || undefined : undefined,
                   })
                   if (res?.debt_id) {
                     toast.success(`Dívida #${res.debt_id} registada (fiado).`)
