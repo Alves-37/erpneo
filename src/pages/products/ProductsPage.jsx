@@ -975,9 +975,9 @@ export default function ProductsPage() {
 
           {loading ? (
             <div className="px-4 py-6 text-sm text-slate-300">Carregando...</div>
-          ) : items.length ? (
+          ) : visibleItems.length ? (
             <div className="min-w-[760px] divide-y divide-slate-800">
-              {items.map((p) => (
+              {visibleItems.map((p) => (
                 <div key={p.id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm items-center">
                   <div className="col-span-5 font-semibold text-slate-100 truncate" title={p.name || ''}>
                     {p.name}
