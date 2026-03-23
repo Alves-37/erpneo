@@ -30,7 +30,7 @@ export default function ReprographyReadingsPage() {
   const businessType = (branch?.business_type || 'retail').toString().trim().toLowerCase()
   const isReprography = businessType === 'reprography' || businessType === 'reprografia'
 
-  const effectiveEstId = isAdmin ? (establishment?.id || undefined) : undefined
+  const effectiveEstId = establishment?.id || undefined
 
   const [loading, setLoading] = useState(true)
   const [printers, setPrinters] = useState([])
