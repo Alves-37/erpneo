@@ -261,7 +261,14 @@ export default function PdvPage() {
     out = out.filter((p) => {
       const sku = String(p?.sku || '').trim().toUpperCase()
       if (sku === 'SERVICO_IMPRESSAO') return false
-      return true
+
+      const isService = Boolean(p?.is_service)
+      const trackStock = Boolean(p?.track_stock)
+      if (!trackStock || isService) return true
+
+      const stockQty = Number(p?.stock_qty ?? 0)
+      if (!Number.isFinite(stockQty)) return true
+      return stockQty > 0
     })
 
     return out
