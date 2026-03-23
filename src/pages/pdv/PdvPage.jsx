@@ -498,6 +498,7 @@ export default function PdvPage() {
       })
       const cached = productCache?.[key]
       if (cached?.items) {
+        loadCategories(b?.business_type || 'retail')
         setBranch(b)
         setItems(cached.items || [])
         setLoading(false)
