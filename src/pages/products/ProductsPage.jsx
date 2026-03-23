@@ -308,6 +308,11 @@ export default function ProductsPage() {
         points = []
       }
 
+      if (isAdmin && !establishmentId) {
+        const def = (points || []).find((p) => p?.is_default) || (points || []).find((p) => p?.is_active) || (points || [])[0]
+        if (def?.id != null) setEstablishmentId(String(def.id))
+      }
+
       const nextKey = makeProductsCacheKey({
         companyId: me?.company_id,
         branchId: b?.id,
@@ -410,10 +415,8 @@ export default function ProductsPage() {
       return
     }
 
-    if (!company) return
-
     ;(async () => {
-      await loadSuppliers()
+      if (company) await loadSuppliers()
       await loadLocations()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1173,7 +1176,7 @@ export default function ProductsPage() {
               />
             </label>
 
-            {isAdmin && !isPharmacy ? (
+            {isAdmin ? (
               <label className="grid gap-2">
                 <div className="text-sm font-medium text-slate-200">Ponto</div>
                 <select
@@ -1181,7 +1184,7 @@ export default function ProductsPage() {
                   onChange={(e) => setEstablishmentId(e.target.value)}
                   className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
                 >
-                  {!establishments?.length ? <option value="">Sem pontos</option> : <option value="">(Ponto do usuário)</option>}
+                  {!establishments?.length ? <option value="">Sem pontos</option> : null}
                   {(establishments || []).map((p) => (
                     <option key={p.id} value={String(p.id)}>
                       {p.name}
