@@ -261,15 +261,6 @@ export default function PdvPage() {
     out = out.filter((p) => {
       const sku = String(p?.sku || '').trim().toUpperCase()
       if (sku === 'SERVICO_IMPRESSAO') return false
-
-      const trackStock = Boolean(p?.track_stock)
-      if (!trackStock) return true
-
-      const minStock = Number(p?.min_stock || 0)
-      const stockQty = Number(p?.stock_qty ?? 0)
-      if (Number.isFinite(minStock) && minStock > 0) {
-        if (Number.isFinite(stockQty) && stockQty <= minStock) return false
-      }
       return true
     })
 
@@ -423,13 +414,22 @@ export default function PdvPage() {
       return
     }
 
-    const products = await listProducts({
-      q: query,
-      is_active: true,
-      in_stock: true,
-      establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
-    })
-    const next = products || []
+    const pageSize = 500
+    const all = []
+    for (let offset = 0; offset < 20000; offset += pageSize) {
+      const rows = await listProducts({
+        q: query,
+        limit: pageSize,
+        offset,
+        is_active: true,
+        in_stock: false,
+        establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
+      })
+      const batch = Array.isArray(rows) ? rows : []
+      all.push(...batch)
+      if (batch.length < pageSize) break
+    }
+    const next = all
     setItems(next)
     setProductCache(cacheKey, { items: next, query: String(query || ''), savedAt: Date.now() })
   }
