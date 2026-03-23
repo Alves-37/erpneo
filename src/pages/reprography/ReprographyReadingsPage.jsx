@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { createPdv3PrinterReading, listPdv3PrinterReadings, listPrinters } from '../../api/printers.js'
+import { listEstablishments } from '../../api/establishments.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 
@@ -30,7 +31,37 @@ export default function ReprographyReadingsPage() {
   const businessType = (branch?.business_type || 'retail').toString().trim().toLowerCase()
   const isReprography = businessType === 'reprography' || businessType === 'reprografia'
 
-  const effectiveEstId = establishment?.id || undefined
+  const fixedEstId = me?.establishment_id != null && Number(me?.establishment_id) > 0 ? Number(me.establishment_id) : null
+  const [establishments, setEstablishments] = useState([])
+  const [selectedEstId, setSelectedEstId] = useState(fixedEstId ? String(fixedEstId) : '')
+
+  const effectiveEstId = isAdmin
+    ? establishment?.id || undefined
+    : fixedEstId != null
+      ? fixedEstId
+      : selectedEstId
+        ? Number(selectedEstId)
+        : undefined
+
+  const printersEstId = effectiveEstId
+
+  async function loadEstablishmentsForEmployee() {
+    // Only needed when the employee does not have a fixed point assigned in the user record.
+    if (isAdmin) return
+    if (fixedEstId != null) return
+    if (!branch?.id) return
+
+    try {
+      const rows = await listEstablishments({ branch_id: branch.id })
+      setEstablishments(Array.isArray(rows) ? rows : [])
+      // Default selection: first available point
+      const first = Array.isArray(rows) && rows.length ? Number(rows[0].id) : null
+      setSelectedEstId(first != null ? String(first) : '')
+    } catch {
+      setEstablishments([])
+      setSelectedEstId('')
+    }
+  }
 
   const [loading, setLoading] = useState(true)
   const [printers, setPrinters] = useState([])
@@ -53,7 +84,7 @@ export default function ReprographyReadingsPage() {
 
   async function loadPrinters() {
     try {
-      const data = await listPrinters({ establishment_id: effectiveEstId, include_inactive: false })
+      const data = await listPrinters({ establishment_id: printersEstId, include_inactive: false })
       const rows = Array.isArray(data) ? data : []
       setPrinters(rows)
       printerById.clear()
@@ -70,7 +101,7 @@ export default function ReprographyReadingsPage() {
       return []
     }
     try {
-      const data = await listPdv3PrinterReadings({ establishment_id: effectiveEstId, printer_id: Number(selectedPrinterId), limit: 20, offset: 0 })
+      const data = await listPdv3PrinterReadings({ establishment_id: printersEstId, printer_id: Number(selectedPrinterId), limit: 20, offset: 0 })
       const rows = Array.isArray(data) ? data : []
       setHistory(rows)
       return rows
@@ -131,7 +162,13 @@ export default function ReprographyReadingsPage() {
       setLoading(false)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextVersion, branch?.id, establishment?.id])
+  }, [contextVersion, branch?.id, isAdmin ? establishment?.id : null, fixedEstId, selectedEstId])
+
+  useEffect(() => {
+    // Load "ponto" options for employees that don't have a fixed establishment_id.
+    loadEstablishmentsForEmployee()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branch?.id, me?.establishment_id])
 
   useEffect(() => {
     recomputeCopies(counterValue, previousCounter)
@@ -189,6 +226,14 @@ export default function ReprographyReadingsPage() {
     return (
       <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-300">
         Esta página está disponível apenas para filiais de reprografia.
+      </div>
+    )
+  }
+
+  if (!isAdmin && fixedEstId == null) {
+    return (
+      <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-300">
+        Este utilizador não tem um ponto associado. Peça ao admin para atribuir um ponto ao funcionário.
       </div>
     )
   }

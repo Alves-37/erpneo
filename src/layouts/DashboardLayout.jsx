@@ -324,8 +324,9 @@ export default function DashboardLayout() {
                           const points = await listEstablishments({ branch_id: b.id })
                           setEstablishments(Array.isArray(points) ? points : [])
                           const currentId = Number(data?.establishment_id || 0) || null
-                          const current = currentId ? (points || []).find((p) => Number(p.id) === currentId) : null
-                          setEstablishment(current || null, { persist: true })
+                          const byMe = currentId ? (points || []).find((p) => Number(p.id) === currentId) : null
+                          const fallback = (points || []).find((p) => p?.is_active) || (points || [])[0] || null
+                          setEstablishment(byMe || fallback || null, { persist: true })
                         } catch {
                           setEstablishments([])
                           setEstablishment(null, { persist: true })
@@ -383,7 +384,14 @@ export default function DashboardLayout() {
                       ))}
                     </select>
                   </>
-                ) : null}
+                ) : (
+                  <>
+                    <div className="text-xs font-semibold text-slate-400">Ponto</div>
+                    <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100">
+                      {establishment?.name || '—'}
+                    </div>
+                  </>
+                )}
 
                 <button
                   type="button"
@@ -414,8 +422,9 @@ export default function DashboardLayout() {
                         const points = await listEstablishments({ branch_id: b.id })
                         setEstablishments(Array.isArray(points) ? points : [])
                         const currentId = Number(data?.establishment_id || 0) || null
-                        const current = currentId ? (points || []).find((p) => Number(p.id) === currentId) : null
-                        setEstablishment(current || null, { persist: true })
+                        const byMe = currentId ? (points || []).find((p) => Number(p.id) === currentId) : null
+                        const fallback = (points || []).find((p) => p?.is_active) || (points || [])[0] || null
+                        setEstablishment(byMe || fallback || null, { persist: true })
                       } catch {
                         setEstablishments([])
                         setEstablishment(null, { persist: true })
@@ -472,7 +481,14 @@ export default function DashboardLayout() {
                     ))}
                   </select>
                 </div>
-              ) : null}
+              ) : (
+                <div className="mt-2">
+                  <div className="text-xs font-semibold text-slate-400">Ponto</div>
+                  <div className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100">
+                    {establishment?.name || '—'}
+                  </div>
+                </div>
+              )}
             </div>
           </header>
           <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-950 text-slate-100">

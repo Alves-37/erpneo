@@ -19,6 +19,11 @@ export async function updateEstablishment(establishmentId, payload) {
   return res.data
 }
 
+export async function deleteEstablishment(establishmentId) {
+  const res = await apiClient.delete(`/establishments/${Number(establishmentId)}`)
+  return res.data
+}
+
 export async function switchMyEstablishment(establishmentId) {
   const res = await apiClient.post('/establishments/switch', { establishment_id: Number(establishmentId) })
   return res.data

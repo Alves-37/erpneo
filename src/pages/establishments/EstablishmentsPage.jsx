@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { createEstablishment, listEstablishments, updateEstablishment } from '../../api/establishments.js'
+import { createEstablishment, deleteEstablishment, listEstablishments, updateEstablishment } from '../../api/establishments.js'
 import { getMyBranch } from '../../api/branches.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
@@ -49,6 +49,10 @@ export default function EstablishmentsPage() {
   const [editing, setEditing] = useState(null)
   const [saving, setSaving] = useState(false)
 
+  const [openDelete, setOpenDelete] = useState(false)
+  const [deleteRow, setDeleteRow] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
   const [name, setName] = useState('')
   const [isActive, setIsActive] = useState(true)
 
@@ -59,6 +63,45 @@ export default function EstablishmentsPage() {
     setName('')
     setIsActive(true)
     setOpenModal(false)
+  }
+
+  async function makeDefault(row) {
+    if (!row?.id) return
+    if (!isAdmin) return
+    try {
+      await updateEstablishment(row.id, { is_default: true })
+      toast.success('Ponto principal atualizado.')
+      await load()
+      bumpContext()
+    } catch (err) {
+      const msg = err?.response?.data?.detail
+      toast.error(msg || 'Não foi possível definir como principal agora.')
+    }
+  }
+
+  function requestDelete(row) {
+    setDeleteRow(row)
+    setOpenDelete(true)
+  }
+
+  async function confirmDelete() {
+    if (!deleteRow?.id) return
+    if (!isAdmin) return
+
+    setDeleting(true)
+    try {
+      await deleteEstablishment(deleteRow.id)
+      toast.success('Ponto excluído.')
+      setOpenDelete(false)
+      setDeleteRow(null)
+      await load()
+      bumpContext()
+    } catch (err) {
+      const msg = err?.response?.data?.detail
+      toast.error(msg || 'Não foi possível excluir agora.')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   function openCreate() {
@@ -169,6 +212,11 @@ export default function EstablishmentsPage() {
                     <div className="text-sm font-semibold text-white truncate" title={r.name || ''}>
                       {r.name}
                     </div>
+                    {r.is_default ? (
+                      <span className="inline-flex rounded-full border border-brand-900/60 bg-brand-950/30 px-2 py-0.5 text-[11px] font-semibold text-brand-200">
+                        Principal
+                      </span>
+                    ) : null}
                     <span
                       className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                         r.is_active
@@ -186,6 +234,14 @@ export default function EstablishmentsPage() {
                   <button
                     type="button"
                     className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
+                    disabled={!isAdmin || r.is_default}
+                    onClick={() => makeDefault(r)}
+                  >
+                    Tornar principal
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
                     disabled={!isAdmin}
                     onClick={() => openEdit(r)}
                   >
@@ -198,6 +254,14 @@ export default function EstablishmentsPage() {
                     onClick={() => toggleActive(r)}
                   >
                     {r.is_active ? 'Desativar' : 'Ativar'}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-60"
+                    disabled={!isAdmin || r.is_default}
+                    onClick={() => requestDelete(r)}
+                  >
+                    Apagar
                   </button>
                 </div>
               </div>
@@ -255,6 +319,47 @@ export default function EstablishmentsPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={openDelete}
+        title="Confirmar exclusão"
+        onClose={() => {
+          if (!deleting) {
+            setOpenDelete(false)
+            setDeleteRow(null)
+          }
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-200">
+            Deseja apagar o ponto <span className="font-semibold text-white">{deleteRow?.name}</span>?
+          </div>
+          <div className="text-xs text-slate-400">
+            Nota: se existirem registros vinculados (ex: caixas, vendas, impressoras), o sistema vai bloquear a exclusão.
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => {
+                setOpenDelete(false)
+                setDeleteRow(null)
+              }}
+              className="px-4 py-2 rounded-xl bg-slate-900 text-slate-200 border border-slate-800 hover:bg-slate-800 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={deleting || !isAdmin}
+              onClick={confirmDelete}
+              className="px-4 py-2 rounded-xl bg-rose-700 text-white hover:bg-rose-800 disabled:opacity-60"
+            >
+              {deleting ? 'Apagando...' : 'Apagar'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )
