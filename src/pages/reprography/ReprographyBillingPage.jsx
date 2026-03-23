@@ -214,7 +214,7 @@ export default function ReprographyBillingPage() {
             ) : (
               <div className="divide-y divide-slate-800">
                 {(billing.rows || []).map((r) => {
-                  const disabledLaunch = !isAdmin || Number(r.copies_new || 0) <= 0
+                  const disabledLaunch = Number(r.copies_new || 0) <= 0
                   return (
                     <div key={r.printer_id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm items-center">
                       <div className="col-span-3 font-semibold text-slate-100">{r.serial_number}</div>
@@ -227,7 +227,7 @@ export default function ReprographyBillingPage() {
                           disabled={disabledLaunch}
                           onClick={() => openLaunchModal(r)}
                           className="rounded-lg bg-emerald-700 hover:bg-emerald-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                          title={!isAdmin ? 'Apenas admin' : Number(r.copies_new || 0) <= 0 ? 'Lançamento já gerado' : ''}
+                          title={Number(r.copies_new || 0) <= 0 ? 'Lançamento já gerado' : ''}
                         >
                           {Number(r.copies_new || 0) <= 0 ? 'Lançado' : 'Gerar Lançamento'}
                         </button>

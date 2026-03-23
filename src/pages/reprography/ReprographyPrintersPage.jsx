@@ -138,8 +138,13 @@ export default function ReprographyPrintersPage() {
     if (!confirmRow?.id) return
     setConfirmBusy(true)
     try {
-      await deletePrinter(confirmRow.id)
-      toast.success('Impressora inativada.')
+      if (confirmRow?.is_active) {
+        await deletePrinter(confirmRow.id)
+        toast.success('Impressora inativada.')
+      } else {
+        await updatePrinter(confirmRow.id, { is_active: true })
+        toast.success('Impressora ativada.')
+      }
       setOpenConfirm(false)
       setConfirmRow(null)
       await load()
@@ -313,7 +318,7 @@ export default function ReprographyPrintersPage() {
                     className="rounded-lg border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-2.5 py-1 text-xs text-rose-200 disabled:opacity-60"
                     onClick={() => requestDelete(r)}
                   >
-                    Inativar
+                    {r.is_active ? 'Inativar' : 'Ativar'}
                   </button>
                 </div>
               </div>
@@ -330,7 +335,7 @@ export default function ReprographyPrintersPage() {
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
               <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-                <div className="text-sm font-semibold text-white">Confirmar Inativação</div>
+                <div className="text-sm font-semibold text-white">Confirmar</div>
                 <button
                   onClick={() => !confirmBusy && setOpenConfirm(false)}
                   className="h-8 w-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-300"
@@ -345,7 +350,15 @@ export default function ReprographyPrintersPage() {
               </div>
               <div className="p-5">
                 <div className="text-sm text-slate-200">
-                  Deseja inativar a impressora <span className="font-semibold text-white">{confirmRow?.serial_number}</span>?
+                  {confirmRow?.is_active ? (
+                    <>
+                      Deseja inativar a impressora <span className="font-semibold text-white">{confirmRow?.serial_number}</span>?
+                    </>
+                  ) : (
+                    <>
+                      Deseja ativar a impressora <span className="font-semibold text-white">{confirmRow?.serial_number}</span>?
+                    </>
+                  )}
                 </div>
                 <div className="mt-5 flex justify-end gap-2">
                   <button
@@ -365,7 +378,7 @@ export default function ReprographyPrintersPage() {
                     onClick={confirmDelete}
                     className="rounded-xl bg-rose-700 hover:bg-rose-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    {confirmBusy ? 'Inativando...' : 'Sim'}
+                    {confirmBusy ? (confirmRow?.is_active ? 'Inativando...' : 'Ativando...') : 'Sim'}
                   </button>
                 </div>
               </div>
