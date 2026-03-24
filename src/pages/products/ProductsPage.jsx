@@ -577,6 +577,11 @@ export default function ProductsPage() {
     setOpenCreate(true)
   }
 
+  function onDelete(p) {
+    setDeletingProduct(p)
+    setOpenDeleteConfirm(true)
+  }
+
   useEffect(() => {
     if (openCreate && editingId && isRestaurant) {
       loadRecipeForProduct(editingId)
