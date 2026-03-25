@@ -117,6 +117,11 @@ export default function PdvPage() {
 
   const [includeTax, setIncludeTax] = useState(true)
 
+  // Estado para modal de produtos vendidos por peso
+  const [weightProduct, setWeightProduct] = useState(null)
+  const [weightInput, setWeightInput] = useState('')
+  const [valueInput, setValueInput] = useState('')
+
   const [openConfirm, setOpenConfirm] = useState(false)
 
   const [openProductDetails, setOpenProductDetails] = useState(false)
@@ -645,12 +650,74 @@ export default function PdvPage() {
   }, [paymentMethod, finalTotal])
 
   function addToCart(p) {
+    // Se produto é vendido por peso OU tem unidade kg, abrir modal para inserir peso
+    if (p.sold_by_weight || (p.unit && p.unit.toLowerCase() === 'kg')) {
+      setWeightProduct(p)
+      setWeightInput('')
+      setValueInput('')
+      return
+    }
+    
     setCart((prev) => {
       const next = { ...(prev || {}) }
       const cur = Number(next[p.id] || 0)
       next[p.id] = cur + 1
       return next
     })
+  }
+
+  // Funções para cálculo bidirecional
+  function handleWeightChange(weight) {
+    setWeightInput(weight)
+    if (weightProduct && weight) {
+      const w = parseDecimal(weight)
+      if (Number.isFinite(w) && w > 0) {
+        const value = w * Number(weightProduct.price || 0)
+        setValueInput(value.toFixed(2))
+      } else {
+        setValueInput('')
+      }
+    } else {
+      setValueInput('')
+    }
+  }
+
+  function handleValueChange(value) {
+    setValueInput(value)
+    if (weightProduct && value) {
+      const v = parseDecimal(value)
+      const price = Number(weightProduct.price || 0)
+      if (Number.isFinite(v) && v > 0 && price > 0) {
+        const weight = v / price
+        setWeightInput(weight.toFixed(3))
+      } else {
+        setWeightInput('')
+      }
+    } else {
+      setWeightInput('')
+    }
+  }
+
+  function addWeightToCart() {
+    if (!weightProduct || !weightInput) return
+    
+    const weight = parseDecimal(weightInput)
+    if (!Number.isFinite(weight) || weight <= 0) {
+      toast.error('Peso inválido')
+      return
+    }
+    
+    setCart((prev) => {
+      const next = { ...(prev || {}) }
+      const cur = Number(next[weightProduct.id] || 0)
+      next[weightProduct.id] = cur + weight
+      return next
+    })
+    
+    setWeightProduct(null)
+    setWeightInput('')
+    setValueInput('')
+    toast.success(`${weightProduct.name} adicionado: ${weight} kg`)
   }
 
   function findProductByCode(codeRaw) {
@@ -1373,7 +1440,7 @@ export default function PdvPage() {
                               {l.product.name}
                             </div>
                             <div className="mt-1 text-xs text-slate-400">
-                              {Number(l.price || 0).toFixed(2)} · {l.product.unit || 'un'}
+                              {Number(l.price || 0).toFixed(2)} · {(l.product.sold_by_weight || (l.product.unit && l.product.unit.toLowerCase() === 'kg')) ? 'kg' : (l.product.unit || 'un')}
                             </div>
                           </div>
                           <div className="text-sm font-semibold text-white">{Number(l.lineTotal || 0).toFixed(2)}</div>
@@ -1646,7 +1713,7 @@ export default function PdvPage() {
                           {l.product.name}
                         </div>
                         <div className="mt-0.5 text-xs text-slate-400">
-                          {Number(l.price || 0).toFixed(2)} · {l.product.unit || 'un'}
+                          {Number(l.price || 0).toFixed(2)} · {(l.product.sold_by_weight || (l.product.unit && l.product.unit.toLowerCase() === 'kg')) ? 'kg' : (l.product.unit || 'un')}
                         </div>
                       </div>
                       <div className="shrink-0 text-sm font-semibold text-white">{Number(l.lineTotal || 0).toFixed(2)}</div>
@@ -2339,6 +2406,81 @@ export default function PdvPage() {
                 className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal para produtos vendidos por peso */}
+      <Modal open={!!weightProduct} title="Informar Peso ou Valor" onClose={() => setWeightProduct(null)}>
+        {weightProduct && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Produto
+              </label>
+              <div className="text-slate-100">{weightProduct.name}</div>
+              <div className="text-xs text-slate-400 mt-1">
+                Preço por kg: {Number(weightProduct.price || 0).toFixed(2)} MZN
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Quilos (kg)
+                </label>
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={weightInput}
+                  onChange={(e) => handleWeightChange(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  placeholder="Ex: 1.250"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Valor (MZN)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={valueInput}
+                  onChange={(e) => handleValueChange(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  placeholder="Ex: 25.00"
+                />
+              </div>
+            </div>
+            
+            <div className="text-xs text-slate-400 bg-slate-800 rounded-lg p-3">
+              💡 <strong>Dica:</strong> Digite o peso para calcular o valor automaticamente, ou digite o valor para calcular o peso automaticamente.
+            </div>
+            
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setWeightProduct(null)
+                  setWeightInput('')
+                  setValueInput('')
+                }}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={addWeightToCart}
+                disabled={!weightInput || parseDecimal(weightInput) <= 0}
+                className="rounded-xl border border-brand-600 bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Adicionar ao Carrinho
               </button>
             </div>
           </div>

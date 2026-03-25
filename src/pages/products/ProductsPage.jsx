@@ -706,7 +706,7 @@ export default function ProductsPage() {
       setEditingId(null)
       resetForm()
       resetRecipeForm()
-      await load()
+      await load({ force: true })
       await loadCategories(businessType)
     } catch (err) {
       const msg = err?.response?.data?.detail
