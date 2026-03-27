@@ -19,6 +19,7 @@ import { listStockLocations } from '../../api/stockLocations.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 import { makeProductsCacheKey, useProductStore } from '../../store/productStore.js'
+import ProductOptionsManager from '../../components/ProductOptionsManager.jsx'
 
 function numericProps() {
   return {
@@ -91,6 +92,7 @@ export default function ProductsPage() {
   const [editingId, setEditingId] = useState(null)
   const [restaurantActionsProduct, setRestaurantActionsProduct] = useState(null)
   const [detailsProduct, setDetailsProduct] = useState(null)
+  const [optionsProduct, setOptionsProduct] = useState(null)
 
   const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false)
   const [deletingProduct, setDeletingProduct] = useState(null)
@@ -115,6 +117,7 @@ export default function ProductsPage() {
   const [isDailyDish, setIsDailyDish] = useState(false)
   const [promoEnabled, setPromoEnabled] = useState(false)
   const [promoPrice, setPromoPrice] = useState('')
+  const [showInMenu, setShowInMenu] = useState(true)
   const [images, setImages] = useState([])
   const [creating, setCreating] = useState(false)
 
@@ -331,8 +334,8 @@ export default function ProductsPage() {
             limit: pageSize,
             offset,
             is_active: undefined,
-            establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
-            show_in_menu: isRestaurant ? true : undefined,
+            establishment_id: isAdmin ? (establishment?.id || undefined) : (establishment?.id || undefined),
+            show_in_menu: isRestaurant ? true : undefined,  // Apenas restaurantes filtram cardápio
           })
           const batch = Array.isArray(rows) ? rows : []
           all.push(...batch)
@@ -446,6 +449,7 @@ export default function ProductsPage() {
     setIsDailyDish(false)
     setPromoEnabled(false)
     setPromoPrice('')
+    setShowInMenu(true)
     setImages([])
     setCategoryMode('select')
     setCategoryId('')
@@ -548,6 +552,7 @@ export default function ProductsPage() {
     setIsDailyDish(Boolean(p?.attributes?.is_daily_dish))
     setPromoEnabled(Boolean(p?.attributes?.promo_enabled))
     setPromoPrice(p?.attributes?.promo_price != null ? String(p.attributes.promo_price) : '')
+    setShowInMenu(Boolean(p?.show_in_menu !== false))
 
     if (Boolean(p?.is_service) && serviceCategoryId && categoryMode === 'select') {
       setCategoryId(String(serviceCategoryId))
@@ -658,6 +663,7 @@ export default function ProductsPage() {
       track_stock: (isReprography && effectiveIsService) ? false : trackStock,
       is_service: isReprography ? effectiveIsService : false,
       is_active: isActive,
+      show_in_menu: showInMenu,
       category_id: categoryMode === 'select' && categoryId ? Number(categoryId) : null,
       category_name: categoryMode === 'new' ? categoryName.trim() : null,
     }
@@ -725,14 +731,26 @@ export default function ProductsPage() {
             Tipo de estabelecimento: <span className="text-slate-100">{businessType}</span>
           </div>
         </div>
-
-        <button
-          onClick={() => load({ force: true })}
-          className="self-start rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-100"
-          type="button"
-        >
-          Atualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setQ('')
+              setFilterCategoryId('')
+              setShowInactiveOnly(false)
+              setOnlyLowStock(false)
+              toast.info('Filtros limpos')
+            }}
+            className="rounded-xl border border-amber-800 bg-amber-900 hover:bg-amber-800 px-4 py-2 text-sm font-semibold text-amber-100"
+          >
+            Limpar Filtros
+          </button>
+          <button
+            onClick={() => load({ force: true })}
+            className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100"
+          >
+            Atualizar
+          </button>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-3">
@@ -1055,6 +1073,21 @@ export default function ProductsPage() {
             Editar
           </button>
 
+          {isRestaurant && (
+            <button
+              type="button"
+              className="w-full rounded-xl border border-brand-600 bg-brand-950/30 hover:bg-brand-950/50 px-4 py-3 text-sm font-semibold text-brand-200"
+              onClick={() => {
+                const p = restaurantActionsProduct
+                setRestaurantActionsProduct(null)
+                if (!p) return
+                setOptionsProduct(p)
+              }}
+            >
+              Opções e Variações
+            </button>
+          )}
+
           <button
             type="button"
             className="w-full rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-100"
@@ -1166,6 +1199,23 @@ export default function ProductsPage() {
           {isReprography ? (
             <div className="text-xs text-slate-400">
               Produtos na categoria <span className="font-semibold text-slate-200">Serviços</span> são tratados como serviços (sem stock e sem custo).
+            </div>
+          ) : null}
+
+          {isRestaurant ? (
+            <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-3">
+              <div className="text-xs font-semibold text-amber-200 mb-2">🍔 Guia Rápido - Restaurante</div>
+              <div className="grid grid-cols-1 gap-2 text-xs text-amber-100">
+                <div>
+                  <span className="font-semibold">🥩 MATÉRIA-PRIMA (Ingredientes):</span> Controla estoque, preço de compra, usado em receitas
+                </div>
+                <div>
+                  <span className="font-semibold">🍔 PRODUTO FINAL (Vendidos):</span> Controla estoque, preço de venda, tem receita e opções
+                </div>
+                <div>
+                  <span className="font-semibold">📋 DICA:</span> Crie primeiro os ingredientes (carne, queijo, pão) depois os produtos (hambúrguer)
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -1677,15 +1727,57 @@ export default function ProductsPage() {
 
           <div className="flex flex-wrap items-center gap-6">
             {!(isReprography && isServiceCategorySelected) ? (
-              <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={trackStock}
-                  onChange={(e) => setTrackStock(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
-                />
-                Controla estoque
-              </label>
+              <div className="space-y-2">
+                <label className="inline-flex items-center active gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={trackStock}
+                    onChange={(e) => setTrackStock(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+                  />
+                  Controla estoque
+                </label>
+                <div className="text-xs text-slate-400 ml-6">
+                  {trackStock ? (
+                    <span>✅ Produto controla quantidade em estoque</span>
+                  ) : (
+                    <span>❌ Produto não controla estoque</span>
+                  )}
+                </div>
+                {trackStock && (
+                  <div className="text-xs text-amber-400 ml-6">
+                    💡 {isRestaurant ? 
+                      (editingId ? "PRODUTO FINAL: Use este campo para itens vendidos (lanches, bebidas)" : "PRODUTO FINAL: Configure para itens vendidos ao cliente") 
+                      : "Use para controlar quantidade de produtos em estoque"}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {isRestaurant ? (
+              <div className="space-y-2">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={showInMenu}
+                    onChange={(e) => setShowInMenu(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-700 text-brand-600 focus:ring-brand-600"
+                  />
+                  Mostrar no cardápio
+                </label>
+                <div className="text-xs text-slate-400 ml-6">
+                  {showInMenu ? (
+                    <span>✅ Produto aparece no cardápio/PDV do restaurante</span>
+                  ) : (
+                    <span>❌ Produto não aparece no cardápio (ingrediente interno)</span>
+                  )}
+                </div>
+                <div className="text-xs text-amber-400 ml-6">
+                  💡 {trackStock ? 
+                    "Marque para PRODUTOS FINAIS (lanches, bebidas), desmarque para INGREDIENTES" 
+                    : "Marque para produtos que serão vendidos no restaurante"}
+                </div>
+              </div>
             ) : null}
 
             <label className="inline-flex items-center gap-2 text-sm text-slate-200">
@@ -1792,6 +1884,16 @@ export default function ProductsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* ProductOptionsManager - Apenas para Restaurantes */}
+      {isRestaurant && (
+        <ProductOptionsManager
+          productId={optionsProduct?.id}
+          productName={optionsProduct?.name}
+          open={Boolean(optionsProduct)}
+          onClose={() => setOptionsProduct(null)}
+        />
+      )}
     </div>
   )
 }

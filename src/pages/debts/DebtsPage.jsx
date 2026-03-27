@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { getMyBranch } from '../../api/branches.js'
-import { listDebts, payDebt } from '../../api/debts.js'
+import { cancelDebt, deleteDebt, getDebt, listDebts, payDebt } from '../../api/debts.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 
@@ -10,6 +10,35 @@ function originSourceLabel(src) {
   if (s === 'printer_pdv3') return 'Faturamento impressão (PDV3)'
   if (s === 'printer_excess') return 'Faturamento excedentes (impressoras)'
   return s || '—'
+}
+
+function DebtItemsTable({ debt, fmtMoney }) {
+  const items = debt?.items
+  if (!Array.isArray(items) || !items.length) return null
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-800">
+      <table className="w-full text-left text-[11px]">
+        <thead>
+          <tr className="border-b border-slate-800 text-slate-500">
+            <th className="px-2 py-1.5 font-semibold">Produto</th>
+            <th className="px-2 py-1.5 font-semibold text-right">Qtd</th>
+            <th className="px-2 py-1.5 font-semibold text-right">Preço</th>
+            <th className="px-2 py-1.5 font-semibold text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it) => (
+            <tr key={it.id} className="border-b border-slate-800/80 text-slate-300">
+              <td className="px-2 py-1.5">#{it.product_id}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums">{Number(it.qty || 0).toFixed(2)}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums">{fmtMoney.format(Number(it.price_at_debt || 0))}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums">{fmtMoney.format(Number(it.line_total || 0))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 function DebtOriginDetails({ debt }) {
@@ -117,6 +146,7 @@ function Modal({ open, title, children, onClose }) {
 export default function DebtsPage() {
   const setBranchGlobal = useAuthStore((s) => s.setBranch)
   const branch = useAuthStore((s) => s.branch)
+  const me = useAuthStore((s) => s.me)
 
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState('open')
@@ -128,7 +158,17 @@ export default function DebtsPage() {
   const [paid, setPaid] = useState('')
   const [paying, setPaying] = useState(false)
 
+  const [openDetails, setOpenDetails] = useState(false)
+  const [detailsDebt, setDetailsDebt] = useState(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
+  const [mutating, setMutating] = useState(false)
+
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState(null) // 'cancel' | 'delete'
+  const [confirmDebt, setConfirmDebt] = useState(null)
+
   const isRestaurant = ((branch?.business_type || 'retail') + '').trim().toLowerCase() === 'restaurant'
+  const isAdmin = ((me?.role || '') + '').trim().toLowerCase() === 'admin' || ((me?.role || '') + '').trim().toLowerCase() === 'owner'
 
   const fmtMoney = useMemo(() => {
     try {
@@ -137,6 +177,67 @@ export default function DebtsPage() {
       return new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     }
   }, [])
+
+  async function openDebtDetails(debtId) {
+    if (!debtId) return
+    setOpenDetails(true)
+    setLoadingDetails(true)
+    setDetailsDebt(null)
+    try {
+      const d = await getDebt(Number(debtId))
+      setDetailsDebt(d)
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Não foi possível carregar detalhes da dívida.'
+      toast.error(msg)
+      setOpenDetails(false)
+    } finally {
+      setLoadingDetails(false)
+    }
+  }
+
+  function requestCancelDebt(debt) {
+    if (!debt?.id) return
+    setConfirmDebt(debt)
+    setConfirmAction('cancel')
+    setConfirmOpen(true)
+  }
+
+  function requestDeleteDebt(debt) {
+    if (!debt?.id) return
+    setConfirmDebt(debt)
+    setConfirmAction('delete')
+    setConfirmOpen(true)
+  }
+
+  async function runConfirmAction() {
+    const debt = confirmDebt
+    const action = confirmAction
+    if (!debt?.id || !action) return
+
+    setMutating(true)
+    try {
+      if (action === 'cancel') {
+        const updated = await cancelDebt(Number(debt.id))
+        toast.success('Dívida anulada.')
+        setDetailsDebt(updated)
+        await loadDebts(status)
+      } else if (action === 'delete') {
+        await deleteDebt(Number(debt.id))
+        toast.success('Dívida apagada.')
+        setOpenDetails(false)
+        setDetailsDebt(null)
+        await loadDebts(status)
+      }
+      setConfirmOpen(false)
+      setConfirmAction(null)
+      setConfirmDebt(null)
+    } catch (err) {
+      const msg = err?.response?.data?.detail || (action === 'delete' ? 'Não foi possível apagar a dívida.' : 'Não foi possível anular a dívida.')
+      toast.error(msg)
+    } finally {
+      setMutating(false)
+    }
+  }
 
   async function loadBranch() {
     try {
@@ -275,6 +376,13 @@ export default function DebtsPage() {
                     </div>
 
                     <div className="mt-3 flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => openDebtDetails(d.id)}
+                        className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white"
+                      >
+                        Detalhes
+                      </button>
                       {d.status === 'open' ? (
                         <button
                           type="button"
@@ -368,6 +476,157 @@ export default function DebtsPage() {
               className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {paying ? 'Processando...' : 'Confirmar pagamento'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={openDetails}
+        title={detailsDebt?.id ? `Detalhes da dívida #${detailsDebt.id}` : 'Detalhes da dívida'}
+        onClose={() => {
+          if (mutating) return
+          setOpenDetails(false)
+          setDetailsDebt(null)
+        }}
+      >
+        {loadingDetails ? (
+          <div className="py-6 text-sm text-slate-300">Carregando...</div>
+        ) : detailsDebt ? (
+          <div className="grid gap-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-slate-400">Cliente</div>
+                  <div className="mt-1 text-sm font-semibold text-white">{detailsDebt.customer_name || '-'}</div>
+                  <div className="mt-2 text-xs text-slate-400">
+                    Estado: <span className="text-slate-200 font-semibold">{detailsDebt.status}</span>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400">
+                    Criado em: <span className="text-slate-200">{detailsDebt.created_at ? String(detailsDebt.created_at).replace('T', ' ').slice(0, 16) : '—'}</span>
+                  </div>
+                  {detailsDebt.paid_at ? (
+                    <div className="mt-1 text-xs text-slate-400">
+                      Pago em: <span className="text-slate-200">{String(detailsDebt.paid_at).replace('T', ' ').slice(0, 16)}</span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-xs font-semibold text-slate-400">Total</div>
+                  <div className="mt-1 text-lg font-semibold text-white">{fmtMoney.format(Number(detailsDebt.total || 0))} MZN</div>
+                </div>
+              </div>
+              <DebtOriginDetails debt={detailsDebt} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <div className="text-xs font-semibold text-slate-400">Líquido</div>
+                <div className="mt-1 text-sm font-semibold text-white">{fmtMoney.format(Number(detailsDebt.net_total || 0))} MZN</div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <div className="text-xs font-semibold text-slate-400">IVA</div>
+                <div className="mt-1 text-sm font-semibold text-white">{fmtMoney.format(Number(detailsDebt.tax_total || 0))} MZN</div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <div className="text-xs font-semibold text-slate-400">Inclui IVA</div>
+                <div className="mt-1 text-sm font-semibold text-white">{detailsDebt.include_tax ? 'Sim' : 'Não'}</div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div className="text-xs font-semibold text-slate-400">Itens</div>
+              <div className="mt-3">
+                <DebtItemsTable debt={detailsDebt} fmtMoney={fmtMoney} />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              {isAdmin && detailsDebt.status === 'open' ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={mutating}
+                    onClick={() => requestCancelDebt(detailsDebt)}
+                    className="rounded-xl border border-amber-900/60 bg-amber-950/30 hover:bg-amber-950/50 px-4 py-2.5 text-sm font-semibold text-amber-200 disabled:opacity-60"
+                  >
+                    Anular
+                  </button>
+                  <button
+                    type="button"
+                    disabled={mutating}
+                    onClick={() => requestDeleteDebt(detailsDebt)}
+                    className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-4 py-2.5 text-sm font-semibold text-rose-200 disabled:opacity-60"
+                  >
+                    Apagar
+                  </button>
+                </>
+              ) : null}
+              <button
+                type="button"
+                disabled={mutating}
+                onClick={() => {
+                  setOpenDetails(false)
+                  setDetailsDebt(null)
+                }}
+                className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-6 text-sm text-slate-300">Sem dados.</div>
+        )}
+      </Modal>
+
+      <Modal
+        open={confirmOpen}
+        title={confirmAction === 'delete' ? 'Confirmar apagar' : 'Confirmar anular'}
+        onClose={() => {
+          if (mutating) return
+          setConfirmOpen(false)
+          setConfirmAction(null)
+          setConfirmDebt(null)
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            <div className="text-sm font-semibold text-white">
+              {confirmAction === 'delete' ? 'Apagar dívida' : 'Anular dívida'}
+            </div>
+            <div className="mt-2 text-sm text-slate-300 leading-relaxed">
+              {confirmAction === 'delete'
+                ? `Tem certeza que deseja apagar a dívida #${confirmDebt?.id}? Esta ação não pode ser desfeita.`
+                : `Tem certeza que deseja anular a dívida #${confirmDebt?.id}?`}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              disabled={mutating}
+              onClick={() => {
+                setConfirmOpen(false)
+                setConfirmAction(null)
+                setConfirmDebt(null)
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={mutating}
+              onClick={runConfirmAction}
+              className={
+                (confirmAction === 'delete'
+                  ? 'rounded-xl bg-rose-600 hover:bg-rose-700'
+                  : 'rounded-xl bg-amber-600 hover:bg-amber-700') +
+                ' px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60'
+              }
+            >
+              {mutating ? 'Processando...' : 'Confirmar'}
             </button>
           </div>
         </div>

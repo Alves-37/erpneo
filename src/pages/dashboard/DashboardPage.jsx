@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getDashboardExpiryAlerts, getDashboardSalesSeries, getDashboardSummary } from '../../api/dashboard.js'
+import { listSales } from '../../api/sales.js'
 import { useAuthStore } from '../../store/authStore.js'
 
 function Modal({ open, title, children, onClose }) {
@@ -46,6 +47,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState(null)
   const [series, setSeries] = useState([])
+  const [sales, setSales] = useState([])
   const [expiryAlerts, setExpiryAlerts] = useState(null)
   const [expiryModalOpen, setExpiryModalOpen] = useState(false)
   const [expiryModalAlerts, setExpiryModalAlerts] = useState(null)
@@ -107,13 +109,15 @@ export default function DashboardPage() {
           })
         : Promise.resolve(null)
 
-      const [s, ss, exp] = await Promise.all([
+      const [s, ss, salesData, exp] = await Promise.all([
         getDashboardSummary({ establishment_id: estId }),
         getDashboardSalesSeries({ days: 30, establishment_id: estId }),
+        listSales({ limit: 100, offset: 0, establishment_id: estId }),
         expPromise,
       ])
       setSummary(s)
       setSeries(ss || [])
+      setSales(salesData || [])
       setExpiryAlerts(exp)
       if (exp) {
         _clearExpiryAlertsDisable()
@@ -121,6 +125,7 @@ export default function DashboardPage() {
     } catch {
       setSummary(null)
       setSeries([])
+      setSales([])
       setExpiryAlerts(null)
     } finally {
       setLoading(false)
@@ -208,6 +213,12 @@ export default function DashboardPage() {
           <div className="mt-2 text-xs text-slate-400">MZN</div>
         </div>
 
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
+          <div className="text-xs font-semibold text-slate-400">Total de vendas listadas</div>
+          <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : Number(sales?.length || 0)}</div>
+          <div className="mt-2 text-xs text-slate-400">Últimas {Math.min(100, Number(sales?.length || 0))}</div>
+        </div>
+
         {!isCashier && (
           <>
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
@@ -285,24 +296,11 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-            ) : (
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
-                <div className="text-xs font-semibold text-slate-400">Lucro (mês)</div>
-                <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.profit_month || 0))}</div>
-                <div className="mt-2 text-xs text-slate-400">MZN</div>
-              </div>
-            )}
+            ) : null}
           </>
         )}
 
-        {isCashier && (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
-            <div className="text-xs font-semibold text-slate-400">Lucro de hoje</div>
-            <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : fmtMoney.format(Number(summary?.profit_today || 0))}</div>
-            <div className="mt-2 text-xs text-slate-400">MZN</div>
-          </div>
-        )}
-      </div>
+              </div>
 
       {!isCashier && (
         <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-4">
@@ -340,21 +338,7 @@ export default function DashboardPage() {
           </svg>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-            <div className="text-xs font-semibold text-slate-400">Lucro de hoje</div>
-            <div className="mt-1 text-lg font-semibold text-white">
-              {loading ? '-' : fmtMoney.format(Number(summary?.profit_today || 0))} MZN
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-            <div className="text-xs font-semibold text-slate-400">Lucro do mês</div>
-            <div className="mt-1 text-lg font-semibold text-white">
-              {loading ? '-' : fmtMoney.format(Number(summary?.profit_month || 0))} MZN
-            </div>
-          </div>
-        </div>
-        </div>
+                </div>
       )}
 
       <Modal

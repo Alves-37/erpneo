@@ -44,6 +44,223 @@ const businessTypeLabel = {
   reprography: 'Reprografia',
 }
 
+function NavIcon({ name }) {
+  const common = {
+    className: 'h-5 w-5 shrink-0',
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+  }
+
+  if (name === 'dashboard') {
+    return (
+      <svg {...common}>
+        <path d="M3 13h8V3H3v10z" />
+        <path d="M13 21h8V11h-8v10z" />
+        <path d="M13 3h8v6h-8V3z" />
+        <path d="M3 21h8v-6H3v6z" />
+      </svg>
+    )
+  }
+  if (name === 'products') {
+    return (
+      <svg {...common}>
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        <path d="M3.3 7l8.7 5 8.7-5" />
+        <path d="M12 22V12" />
+      </svg>
+    )
+  }
+  if (name === 'warehouse') {
+    return (
+      <svg {...common}>
+        <path d="M3 21V8l9-5 9 5v13" />
+        <path d="M9 21V12h6v9" />
+      </svg>
+    )
+  }
+  if (name === 'stock') {
+    return (
+      <svg {...common}>
+        <path d="M7 7h10" />
+        <path d="M7 12h10" />
+        <path d="M7 17h10" />
+        <path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
+      </svg>
+    )
+  }
+  if (name === 'stock_transfer') {
+    return (
+      <svg {...common}>
+        <path d="M7 7h10" />
+        <path d="M7 12h10" />
+        <path d="M9 16l-3 3 3 3" />
+        <path d="M6 19h12" />
+      </svg>
+    )
+  }
+  if (name === 'stock_adjust') {
+    return (
+      <svg {...common}>
+        <path d="M12 20V10" />
+        <path d="M18 20V4" />
+        <path d="M6 20v-6" />
+      </svg>
+    )
+  }
+  if (name === 'stock_history') {
+    return (
+      <svg {...common}>
+        <path d="M3 12a9 9 0 1 0 3-6.7" />
+        <path d="M3 3v6h6" />
+        <path d="M12 7v5l3 3" />
+      </svg>
+    )
+  }
+  if (name === 'sales') {
+    return (
+      <svg {...common}>
+        <path d="M12 1v22" />
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" />
+      </svg>
+    )
+  }
+  if (name === 'debts') {
+    return (
+      <svg {...common}>
+        <path d="M17 9V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
+        <path d="M20 12H7" />
+        <path d="M15 17l5-5-5-5" />
+      </svg>
+    )
+  }
+  if (name === 'returns') {
+    return (
+      <svg {...common}>
+        <path d="M3 7h13a4 4 0 0 1 0 8H7" />
+        <path d="M7 15l-4-4 4-4" />
+      </svg>
+    )
+  }
+  if (name === 'pdv') {
+    return (
+      <svg {...common}>
+        <path d="M7 7h10" />
+        <path d="M7 11h10" />
+        <path d="M7 15h6" />
+        <path d="M5 3h14a2 2 0 0 1 2 2v16H3V5a2 2 0 0 1 2-2z" />
+      </svg>
+    )
+  }
+  if (name === 'printers') {
+    return (
+      <svg {...common}>
+        <path d="M6 9V2h12v7" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <path d="M6 14h12v8H6z" />
+      </svg>
+    )
+  }
+  if (name === 'establishments') {
+    return (
+      <svg {...common}>
+        <path d="M3 21V9l9-6 9 6v12" />
+        <path d="M9 21V12h6v9" />
+      </svg>
+    )
+  }
+  if (name === 'users') {
+    return (
+      <svg {...common}>
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    )
+  }
+  if (name === 'orders') {
+    return (
+      <svg {...common}>
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+      </svg>
+    )
+  }
+  if (name === 'tables') {
+    return (
+      <svg {...common}>
+        <path d="M3 10h18" />
+        <path d="M4 21l2-7" />
+        <path d="M20 21l-2-7" />
+        <path d="M8 21l1-11" />
+        <path d="M16 21l-1-11" />
+      </svg>
+    )
+  }
+  if (name === 'finance') {
+    return (
+      <svg {...common}>
+        <path d="M12 1v22" />
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" />
+      </svg>
+    )
+  }
+  if (name === 'reports') {
+    return (
+      <svg {...common}>
+        <path d="M4 19V5" />
+        <path d="M4 19h16" />
+        <path d="M8 17v-5" />
+        <path d="M12 17V7" />
+        <path d="M16 17v-3" />
+      </svg>
+    )
+  }
+  if (name === 'settings') {
+    return (
+      <svg {...common}>
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.04.04a2 2 0 0 1-1.42 3.42h-.06a1.7 1.7 0 0 0-1.62 1.17 1.7 1.7 0 0 1-3.12.26 1.7 1.7 0 0 0-1.94-.73 1.7 1.7 0 0 0-1.25 1.47A2 2 0 0 1 5.52 22a2 2 0 0 1-1.42-3.42l.04-.04A1.7 1.7 0 0 0 4.5 15a1.7 1.7 0 0 0-1.17-1.62 2 2 0 0 1 0-3.76A1.7 1.7 0 0 0 4.5 8a1.7 1.7 0 0 0-.34-1.87l-.04-.04A2 2 0 0 1 5.52 2a2 2 0 0 1 1.87 1.34 1.7 1.7 0 0 0 1.94.73A1.7 1.7 0 0 0 10.58 2.6 2 2 0 0 1 14.48 2a2 2 0 0 1 1.42 3.42l-.04.04A1.7 1.7 0 0 0 19.4 9.0a1.7 1.7 0 0 0 1.17 1.62 2 2 0 0 1 0 3.76A1.7 1.7 0 0 0 19.4 15z" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg {...common}>
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </svg>
+  )
+}
+
+function navIconKey(to) {
+  if (to === '/dashboard') return 'dashboard'
+  if (to === '/products') return 'products'
+  if (to === '/warehouse') return 'warehouse'
+  if (to === '/stock/transfer') return 'stock_transfer'
+  if (to === '/stock/adjust') return 'stock_adjust'
+  if (to === '/stock/history') return 'stock_history'
+  if (to.startsWith('/stock/')) return 'stock'
+  if (to === '/sales') return 'sales'
+  if (to === '/debts') return 'debts'
+  if (to === '/returns') return 'returns'
+  if (to === '/pdv') return 'pdv'
+  if (to === '/orders') return 'orders'
+  if (to === '/tables') return 'tables'
+  if (to === '/finance') return 'finance'
+  if (to === '/reports') return 'reports'
+  if (to === '/establishments') return 'establishments'
+  if (to === '/users') return 'users'
+  if (to === '/settings') return 'settings'
+  if (to === '/reprography/printers') return 'printers'
+  return 'menu'
+}
+
 function _filterBranchesByVisibility(visibleBranchIds, branches) {
   if (!Array.isArray(visibleBranchIds) || !visibleBranchIds.length) return branches
   const set = new Set(visibleBranchIds.map((x) => String(Number(x))))
@@ -53,6 +270,13 @@ function _filterBranchesByVisibility(visibleBranchIds, branches) {
 export default function DashboardLayout() {
   const [logoutOpen, setLogoutOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem('neoerp_sidebar_collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
   const [branches, setBranches] = useState([])
   const [switchingBranch, setSwitchingBranch] = useState(false)
   const [establishments, setEstablishments] = useState([])
@@ -187,6 +411,18 @@ export default function DashboardLayout() {
     }
   }, [setBranch, contextVersion])
 
+  function toggleSidebarCollapsed() {
+    setSidebarCollapsed((v) => {
+      const next = !v
+      try {
+        window.localStorage.setItem('neoerp_sidebar_collapsed', next ? '1' : '0')
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }
+
   useEffect(() => {
     // me já é carregado junto com as filiais no effect acima
   }, [])
@@ -205,17 +441,40 @@ export default function DashboardLayout() {
         {/* Sidebar */}
         <aside className={`
           fixed lg:static inset-y-0 left-0 z-50 
-          w-72 bg-slate-900 border-r border-slate-800 
+          ${sidebarCollapsed ? 'lg:w-20' : 'w-72'} bg-slate-900 border-r border-slate-800 
           h-screen overflow-y-auto p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.4)]
           transform transition-transform duration-300 ease-in-out
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}>
-          <div>
-            <div className="font-semibold text-xl text-white tracking-wide">NEO ERP</div>
-            <div className="text-sm text-slate-400 mt-1">Neotrix Tecnologias</div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className={`font-semibold text-xl text-white tracking-wide ${sidebarCollapsed ? 'lg:hidden' : ''}`}>NEO ERP</div>
+              <div className={`text-sm text-slate-400 mt-1 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>Neotrix Tecnologias</div>
+            </div>
+
+            <button
+              type="button"
+              onClick={toggleSidebarCollapsed}
+              className={
+                'hidden lg:inline-flex h-10 w-10 items-center justify-center rounded-xl border text-slate-200 ' +
+                (sidebarCollapsed
+                  ? 'border-brand-600 bg-brand-600 hover:bg-brand-700 shadow-[0_0_0_6px_rgba(37,99,235,0.16)] animate-pulse'
+                  : 'border-slate-800 bg-slate-950 hover:bg-slate-800')
+              }
+              aria-label={sidebarCollapsed ? 'Abrir menu' : 'Fechar menu'}
+              title={sidebarCollapsed ? 'Abrir menu' : 'Fechar menu'}
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {sidebarCollapsed ? (
+                  <path d="M9 18l6-6-6-6" />
+                ) : (
+                  <path d="M15 18l-6-6 6-6" />
+                )}
+              </svg>
+            </button>
           </div>
           <div className="mt-6 h-px w-full bg-slate-800" />
-          <nav className="mt-5 flex flex-col gap-2">
+          <nav className={sidebarCollapsed ? 'mt-5 flex flex-col gap-2 items-center' : 'mt-5 flex flex-col gap-2'}>
             {nav
               .filter((item) => !item.restaurantOnly || isRestaurant)
               .filter((item) => !item.pharmacyOnly || isPharmacy)
@@ -242,8 +501,9 @@ export default function DashboardLayout() {
                   key={item.to}
                   to={item.to}
                   onClick={() => setSidebarOpen(false)}
+                  title={sidebarCollapsed ? item.label : undefined}
                   className={({ isActive }) =>
-                    `px-4 py-3 rounded-xl text-base font-semibold transition-all duration-150 ${
+                    `${sidebarCollapsed ? 'px-0 py-3 w-12 justify-center' : 'px-4 py-3'} rounded-xl text-base font-semibold transition-all duration-150 flex items-center ${
                       (isActive ||
                       (item.to === '/reprography/printers' && location.pathname.startsWith('/reprography/')))
                         ? 'bg-brand-600 text-white shadow-sm'
@@ -253,8 +513,11 @@ export default function DashboardLayout() {
                     }`
                   }
                 >
-                  <span className="flex items-center justify-between gap-3">
-                    <span>{item.label}</span>
+                  <span className={sidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center justify-between gap-3 w-full'}>
+                    <span className={sidebarCollapsed ? 'flex items-center justify-center w-full' : 'flex items-center gap-3'}>
+                      <NavIcon name={navIconKey(item.to)} />
+                      <span className={sidebarCollapsed ? 'lg:hidden' : ''}>{item.label}</span>
+                    </span>
                     {item.to === '/orders' && hasNewOrders ? (
                       <span className="h-2.5 w-2.5 rounded-full bg-rose-200 shadow-[0_0_0_6px_rgba(244,63,94,0.14)]" />
                     ) : null}

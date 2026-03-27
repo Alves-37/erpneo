@@ -33,6 +33,7 @@ function Modal({ open, title, children, onClose }) {
               </svg>
             </button>
           </div>
+
           <div className="max-h-[80vh] overflow-y-auto p-5">{children}</div>
         </div>
       </div>
@@ -74,6 +75,12 @@ export default function SalesPage() {
   }, [establishments])
 
   const [company, setCompany] = useState(null)
+
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterPayment, setFilterPayment] = useState('')
+  const [filterChannel, setFilterChannel] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
 
   const [issuing, setIssuing] = useState(false)
   const [issuedDoc, setIssuedDoc] = useState(null)
@@ -137,7 +144,16 @@ export default function SalesPage() {
 
       const [s, rows] = await Promise.all([
         getDashboardSummary({ establishment_id: isAdmin ? (establishment?.id || undefined) : undefined }),
-        listSales({ limit: 100, offset: 0, establishment_id: isAdmin ? (establishment?.id || undefined) : undefined }),
+        listSales({
+          limit: 100,
+          offset: 0,
+          establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
+          status: filterStatus || undefined,
+          payment_method: filterPayment || undefined,
+          sale_channel: filterChannel || undefined,
+          date_from: filterDateFrom ? new Date(filterDateFrom).toISOString() : undefined,
+          date_to: filterDateTo ? new Date(filterDateTo).toISOString() : undefined,
+        }),
       ])
       setSummary(s)
       setSales(rows || [])
@@ -183,6 +199,19 @@ export default function SalesPage() {
       mounted = false
     }
   }, [])
+
+  async function applyFilters() {
+    await refresh()
+  }
+
+  async function clearFilters() {
+    setFilterStatus('')
+    setFilterPayment('')
+    setFilterChannel('')
+    setFilterDateFrom('')
+    setFilterDateTo('')
+    window.setTimeout(() => refresh(), 0)
+  }
 
   const paymentMethodLabel = useMemo(() => {
     return {
@@ -357,10 +386,12 @@ export default function SalesPage() {
                 try {
                   const s = await getCashSessionSummary(Number(cs.id))
                   setCashSummary(s || null)
+                  // Pré-preencher valor contado com o esperado
+                  setCashClosingCounted(String(s?.expected_cash || 0))
                 } catch {
                   setCashSummary(null)
+                  setCashClosingCounted('0')
                 }
-                setCashClosingCounted('')
                 setCashClosingNotes('')
                 setOpenCashClose(true)
               } else {
@@ -399,22 +430,98 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-          <div className="text-xs font-semibold text-slate-400">Vendas de hoje</div>
-          <div className="mt-2 text-3xl font-semibold text-white">
-            {loading ? '-' : fmtMoney.format(Number(summary?.sales_today || 0))}
+      {/* Sales Filters */}
+      <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900 p-3">
+        <div className="text-sm font-semibold text-white mb-3">Filtros</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Estado</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => {
+                setFilterStatus(e.target.value)
+                refresh()
+              }}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">Todos</option>
+              <option value="completed">Concluída</option>
+              <option value="pending">Pendente</option>
+              <option value="void">Anulada</option>
+            </select>
           </div>
-          <div className="mt-2 text-xs text-slate-400">MZN</div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Método de Pagamento</label>
+            <select
+              value={filterPayment}
+              onChange={(e) => {
+                setFilterPayment(e.target.value)
+                refresh()
+              }}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">Todos</option>
+              <option value="cash">Dinheiro</option>
+              <option value="mpesa">M-Pesa</option>
+              <option value="card">Cartão</option>
+              <option value="transfer">Transferência</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Canal de Venda</label>
+            <select
+              value={filterChannel}
+              onChange={(e) => {
+                setFilterChannel(e.target.value)
+                refresh()
+              }}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">Todos</option>
+              <option value="pos">PDV</option>
+              <option value="ecommerce">E-commerce</option>
+              <option value="phone">Telefone</option>
+              <option value="manual">Manual</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Data</label>
+            <div className="flex gap-2">
+              <input
+                type="datetime-local"
+                value={filterDateFrom}
+                onChange={(e) => {
+                  setFilterDateFrom(e.target.value)
+                  refresh()
+                }}
+                className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                placeholder="De"
+              />
+              <input
+                type="datetime-local"
+                value={filterDateTo}
+                onChange={(e) => {
+                  setFilterDateTo(e.target.value)
+                  refresh()
+                }}
+                className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                placeholder="Até"
+              />
+            </div>
+          </div>
         </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-          <div className="text-xs font-semibold text-slate-400">Total de vendas listadas</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{loading ? '-' : Number(sales?.length || 0)}</div>
-          <div className="mt-2 text-xs text-slate-400">Últimas {Math.min(100, Number(sales?.length || 0))}</div>
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200"
+          >
+            Limpar Filtros
+          </button>
         </div>
       </div>
 
+      
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 flex flex-col flex-1 min-h-0">
         <div className="border-b border-slate-800 px-5 py-4">
           <div className="text-sm font-semibold text-white">Vendas recentes</div>
@@ -1018,6 +1125,10 @@ export default function SalesPage() {
           {cashSummary ? (
             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-sm">
               <div className="flex items-center justify-between text-slate-300">
+                <div>Total de vendas (todos os métodos)</div>
+                <div className="font-semibold text-white">{Number(cashSummary.total_sales_all_methods || 0).toFixed(2)} MZN</div>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-slate-300">
                 <div>Esperado (dinheiro)</div>
                 <div className="font-semibold text-white">{Number(cashSummary.expected_cash || 0).toFixed(2)} MZN</div>
               </div>
@@ -1068,7 +1179,7 @@ export default function SalesPage() {
               onClick={async () => {
                 const n = parseDecimal(cashClosingCounted)
                 if (!Number.isFinite(n) || n < 0) {
-                  toast.error('Valor contado inválido.')
+                  toast.error('Valor contado inválido. Informe um valor maior ou igual a 0.')
                   return
                 }
                 try {

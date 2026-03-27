@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { closeOrder, deleteOrder, listOrders, updateOrder } from '../../api/orders.js'
+import { closeOrder, createOrder, deleteOrder, listOrders, updateOrder } from '../../api/orders.js'
 import { listProductImages, listProducts } from '../../api/products.js'
 import { toast } from '../../services/toast.js'
+import ProductOptionSelector from '../../components/ProductOptionSelector.jsx'
 
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
@@ -64,6 +65,16 @@ export default function OrdersPage() {
   const [confirmOrder, setConfirmOrder] = useState(null)
   const [confirmBusy, setConfirmBusy] = useState(false)
 
+  // Estados para criação de pedidos
+  const [openCreateOrder, setOpenCreateOrder] = useState(false)
+  const [createOrderLoading, setCreateOrderLoading] = useState(false)
+  const [newTableNumber, setNewTableNumber] = useState('')
+  const [newSeatNumber, setNewSeatNumber] = useState('')
+  const [newOrderItems, setNewOrderItems] = useState([])
+
+  // Estado para seleção de opções
+  const [optionsProduct, setOptionsProduct] = useState(null)
+
   const paidNum = useMemo(() => {
     const n = Number(String(paid || '').replace(',', '.'))
     return Number.isFinite(n) ? n : 0
@@ -117,11 +128,18 @@ export default function OrdersPage() {
   }
 
   async function loadProducts() {
+    setLoading(true)
     try {
-      const data = await listProducts({ limit: 500, offset: 0 })
+      const data = await listProducts({ 
+        limit: 500, 
+        offset: 0,
+        show_in_menu: isRestaurant ? true : undefined  // Apenas para restaurantes
+      })
       setProducts(data || [])
     } catch {
       setProducts([])
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -133,6 +151,17 @@ export default function OrdersPage() {
   useEffect(() => {
     loadProducts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Forçar reload quando mudar de aba ou focar na página
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadProducts()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
   useEffect(() => {
@@ -225,6 +254,114 @@ export default function OrdersPage() {
     setOpenClose(true)
   }
 
+  function addProductToOrder(product) {
+    if (!newTableNumber || !newSeatNumber) {
+      toast.error('Informe a mesa e o cliente/assento primeiro.')
+      return
+    }
+
+    // Abrir modal de opções para restaurantes
+    setOptionsProduct({
+      ...product,
+      basePrice: Number(product.price || 0),
+      quantity: 1
+    })
+  }
+
+  function handleOptionsChange(optionsData) {
+    if (!optionsProduct) return
+
+    const newItem = {
+      product_id: optionsProduct.id,
+      product_name: optionsProduct.name,
+      qty: optionsProduct.quantity || 1,
+      price_at_order: optionsProduct.basePrice,
+      cost_at_order: Number(optionsProduct.cost || 0),
+      line_total: optionsData.totalPrice,
+      options: optionsData.selectedOptions
+    }
+
+    // Verificar se já existe um item igual
+    const existingIndex = newOrderItems.findIndex(item => 
+      item.product_id === optionsProduct.id && 
+      JSON.stringify(item.options) === JSON.stringify(optionsData.selectedOptions)
+    )
+
+    if (existingIndex >= 0) {
+      const updated = [...newOrderItems]
+      updated[existingIndex] = { ...updated[existingIndex], qty: updated[existingIndex].qty + 1 }
+      setNewOrderItems(updated)
+    } else {
+      setNewOrderItems(prev => [...prev, newItem])
+    }
+
+    setOptionsProduct(null)
+  }
+
+  function removeNewOrderItem(index) {
+    setNewOrderItems(prev => prev.filter((_, i) => i !== index))
+  }
+
+  function updateNewItemQuantity(index, newQty) {
+    if (newQty <= 0) {
+      removeNewOrderItem(index)
+      return
+    }
+
+    const updated = [...newOrderItems]
+    updated[index] = { ...updated[index], qty: newQty, line_total: newQty * updated[index].price_at_order }
+    setNewOrderItems(updated)
+  }
+
+  async function doCreateOrder() {
+    if (!newTableNumber || !newSeatNumber) {
+      toast.error('Informe a mesa e o cliente/assento.')
+      return
+    }
+
+    if (newOrderItems.length === 0) {
+      toast.error('Adicione pelo menos um produto ao pedido.')
+      return
+    }
+
+    setCreateOrderLoading(true)
+    try {
+      const payload = {
+        table_number: parseInt(newTableNumber),
+        seat_number: parseInt(newSeatNumber),
+        items: newOrderItems.map(item => ({
+          product_id: item.product_id,
+          qty: item.qty,
+          price_at_order: item.price_at_order,
+          cost_at_order: item.cost_at_order
+        }))
+      }
+
+      await createOrder(payload)
+      toast.success('Pedido criado com sucesso!')
+      
+      // Resetar formulário
+      setOpenCreateOrder(false)
+      setNewTableNumber('')
+      setNewSeatNumber('')
+      setNewOrderItems([])
+      
+      // Recarregar lista
+      await load()
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Não foi possível criar o pedido.')
+    } finally {
+      setCreateOrderLoading(false)
+    }
+  }
+
+  function resetCreateOrder() {
+    setNewTableNumber('')
+    setNewSeatNumber('')
+    setNewOrderItems([])
+    setOptionsProduct(null)
+  }
+
   async function doClose() {
     if (!closingOrder) return
 
@@ -249,10 +386,10 @@ export default function OrdersPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <div className="text-xl font-semibold">Pedidos</div>
-          <div className="mt-1 text-sm text-slate-300">Acompanhe e finalize pedidos do restaurante</div>
+          <h1 className="text-xl font-bold text-white">Pedidos</h1>
+          <p className="text-xs text-slate-400">Gestão de pedidos do restaurante</p>
         </div>
       </div>
 
@@ -640,6 +777,172 @@ export default function OrdersPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Modal de Criar Pedido */}
+      <Modal
+        open={openCreateOrder}
+        title="Novo Pedido"
+        onClose={() => {
+          if (!createOrderLoading) {
+            setOpenCreateOrder(false)
+            resetCreateOrder()
+          }
+        }}
+      >
+        <div className="grid gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Mesa</label>
+              <input
+                type="number"
+                value={newTableNumber}
+                onChange={(e) => setNewTableNumber(e.target.value)}
+                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                placeholder="Nº"
+                min="1"
+                disabled={createOrderLoading}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Cliente/Assento</label>
+              <input
+                type="number"
+                value={newSeatNumber}
+                onChange={(e) => setNewSeatNumber(e.target.value)}
+                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                placeholder="Nº"
+                min="1"
+                disabled={createOrderLoading}
+              />
+            </div>
+          </div>
+
+          {/* Lista de Produtos */}
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-2">Produtos</label>
+            <div className="max-h-60 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2">
+              {products.length === 0 ? (
+                <div className="text-xs text-slate-400 text-center py-4">Nenhum produto disponível</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {products.map(product => (
+                    <button
+                      key={product.id}
+                      onClick={() => addProductToOrder(product)}
+                      className="rounded-lg border border-slate-700 bg-slate-900 p-2 text-left hover:border-brand-600 transition-colors disabled:opacity-60"
+                      disabled={!newTableNumber || !newSeatNumber || createOrderLoading}
+                    >
+                      <div className="text-sm font-medium text-slate-100 truncate">{product.name}</div>
+                      <div className="text-xs text-slate-400">{Number(product.price || 0).toFixed(2)} MT</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Itens do Pedido */}
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-2">
+              Itens do Pedido ({newOrderItems.length})
+            </label>
+            <div className="max-h-40 overflow-y-auto space-y-2">
+              {newOrderItems.length === 0 ? (
+                <div className="text-xs text-slate-400 text-center py-4">Nenhum item adicionado</div>
+              ) : (
+                newOrderItems.map((item, index) => (
+                  <div key={index} className="rounded-lg border border-slate-800 bg-slate-950 p-2">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-slate-100 truncate">{item.product_name}</div>
+                        {item.options && Object.keys(item.options).length > 0 && (
+                          <div className="text-xs text-brand-400">+{Object.keys(item.options).length} opção(ões)</div>
+                        )}
+                        <div className="text-xs text-slate-400">
+                          {Number(item.price_at_order).toFixed(2)} MT × {item.qty}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-white">
+                          {Number(item.line_total).toFixed(2)} MT
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          <button
+                            onClick={() => updateNewItemQuantity(index, item.qty - 1)}
+                            className="h-5 w-5 rounded border border-slate-700 bg-slate-800 text-xs text-slate-300 hover:bg-slate-700"
+                            disabled={createOrderLoading}
+                          >
+                            -
+                          </button>
+                          <span className="text-xs text-slate-300 w-4 text-center">{item.qty}</span>
+                          <button
+                            onClick={() => updateNewItemQuantity(index, item.qty + 1)}
+                            className="h-5 w-5 rounded border border-slate-700 bg-slate-800 text-xs text-slate-300 hover:bg-slate-700"
+                            disabled={createOrderLoading}
+                          >
+                            +
+                          </button>
+                          <button
+                            onClick={() => removeNewOrderItem(index)}
+                            className="h-5 w-5 rounded border border-rose-700 bg-rose-950 text-xs text-rose-300 hover:bg-rose-900"
+                            disabled={createOrderLoading}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Total */}
+          <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-white">Total</span>
+              <span className="text-lg font-bold text-white">
+                {newOrderItems.reduce((sum, item) => sum + item.line_total, 0).toFixed(2)} MT
+              </span>
+            </div>
+          </div>
+
+          {/* Botões */}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              disabled={createOrderLoading}
+              onClick={() => {
+                setOpenCreateOrder(false)
+                resetCreateOrder()
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={createOrderLoading || newOrderItems.length === 0}
+              onClick={doCreateOrder}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {createOrderLoading ? 'Criando...' : 'Criar Pedido'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Opções */}
+      {optionsProduct && (
+        <ProductOptionSelector
+          productId={optionsProduct.id}
+          productName={optionsProduct.name}
+          basePrice={optionsProduct.basePrice}
+          onOptionsChange={handleOptionsChange}
+          onClose={() => setOptionsProduct(null)}
+        />
+      )}
     </div>
   )
 }

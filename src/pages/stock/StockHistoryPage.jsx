@@ -12,11 +12,69 @@ function formatDateTime(value) {
   return d.toLocaleString()
 }
 
+function movementTypeLabel(value) {
+  const k = String(value || '').trim().toLowerCase()
+  if (!k) return '—'
+  return {
+    adjustment: 'Ajuste',
+    purchase: 'Compra',
+    sale: 'Venda',
+    transfer: 'Transferência',
+    initial: 'Inicial',
+    sale_out: 'Saída (venda)',
+    sale_return_in: 'Entrada (devolução)',
+    sale_void: 'Venda anulada',
+    sale_void_in: 'Entrada (anulação)',
+    transfer_out: 'Saída (transferência)',
+    transfer_in: 'Entrada (transferência)',
+  }[k] || k
+}
+
+function movementTypeColor(value) {
+  const k = String(value || '').trim().toLowerCase()
+  if (k.includes('return') || k.endsWith('_in')) return 'border-emerald-900/60 bg-emerald-950/30 text-emerald-200'
+  if (k.includes('void')) return 'border-amber-900/60 bg-amber-950/30 text-amber-200'
+  if (k.includes('sale') || k.endsWith('_out')) return 'border-rose-900/60 bg-rose-950/30 text-rose-200'
+  if (k.includes('adjust')) return 'border-sky-900/60 bg-sky-950/30 text-sky-200'
+  if (k.includes('transfer')) return 'border-violet-900/60 bg-violet-950/30 text-violet-200'
+  return 'border-slate-800 bg-slate-950 text-slate-200'
+}
+
+function referenceLabel(refType, refId) {
+  const t = String(refType || '').trim().toLowerCase()
+  const id = refId != null ? String(refId) : ''
+  if (!t && !id) return '—'
+  if (t === 'sale') return `Venda #${id}`
+  if (t === 'sale_void') return `Venda anulada #${id}`
+  if (t === 'purchase') return `Compra #${id}`
+  if (t === 'transfer') return `Transferência #${id}`
+  if (t === 'adjustment') return `Ajuste #${id}`
+  return `${t || 'ref'}${id ? ` #${id}` : ''}`
+}
+
+function referenceColor(refType) {
+  const t = String(refType || '').trim().toLowerCase()
+  if (t.includes('void')) return 'border-amber-900/60 bg-amber-950/30 text-amber-200'
+  if (t.includes('sale')) return 'border-rose-900/60 bg-rose-950/30 text-rose-200'
+  if (t.includes('purchase')) return 'border-emerald-900/60 bg-emerald-950/30 text-emerald-200'
+  if (t.includes('transfer')) return 'border-violet-900/60 bg-violet-950/30 text-violet-200'
+  if (t.includes('adjust')) return 'border-sky-900/60 bg-sky-950/30 text-sky-200'
+  return 'border-slate-800 bg-slate-950 text-slate-200'
+}
+
 function formatQty(v) {
   const n = Number(v)
   if (!Number.isFinite(n)) return String(v ?? '')
   const sign = n > 0 ? '+' : ''
   return `${sign}${n}`
+}
+
+function qtyColor(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n) || n === 0) return 'border-slate-800 bg-slate-950 text-slate-200'
+  return n > 0
+    ? 'border-emerald-900/60 bg-emerald-950/30 text-emerald-200'
+    : 'border-amber-900/60 bg-amber-950/30 text-amber-200'
 }
 
 function Modal({ open, title, children, onClose }) {
@@ -386,7 +444,7 @@ export default function StockHistoryPage() {
               {items.map((m) => {
                 const p = productById.get(String(m.product_id))
                 const l = locationById.get(String(m.location_id))
-                const ref = m.reference_type && m.reference_id != null ? `${m.reference_type}#${m.reference_id}` : '-'
+                const refText = referenceLabel(m.reference_type, m.reference_id)
                 return (
                   <div key={m.id} className="px-4 py-3">
                     <div className="grid grid-cols-2 gap-3 text-sm">
@@ -395,15 +453,32 @@ export default function StockHistoryPage() {
                           <div className="text-slate-300 truncate" title={l?.name || ''}>
                             {l ? `${l.type === 'store' ? 'Loja' : 'Armazém'} · ${l.name}` : `#${m.location_id}`}
                           </div>
-                          <div className="text-slate-300 truncate" title={m.movement_type || ''}>
-                            {m.movement_type}
+                          <div className="flex justify-end">
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${movementTypeColor(m.movement_type)}`}
+                              title={String(m.movement_type || '')}
+                            >
+                              {movementTypeLabel(m.movement_type)}
+                            </span>
                           </div>
                         </>
                       ) : colsView === 'qty_ref' ? (
                         <>
-                          <div className="text-right text-slate-100 font-semibold">{formatQty(m.qty_delta)}</div>
-                          <div className="text-right text-slate-400 truncate" title={ref}>
-                            {ref}
+                          <div className="flex justify-end">
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums ${qtyColor(m.qty_delta)}`}
+                              title={formatQty(m.qty_delta)}
+                            >
+                              {formatQty(m.qty_delta)}
+                            </span>
+                          </div>
+                          <div className="flex justify-end">
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${referenceColor(m.reference_type)}`}
+                              title={refText}
+                            >
+                              {refText}
+                            </span>
                           </div>
                         </>
                       ) : (
@@ -443,7 +518,7 @@ export default function StockHistoryPage() {
               {items.map((m) => {
                 const p = productById.get(String(m.product_id))
                 const l = locationById.get(String(m.location_id))
-                const ref = m.reference_type && m.reference_id != null ? `${m.reference_type}#${m.reference_id}` : '-'
+                const refText = referenceLabel(m.reference_type, m.reference_id)
                 return (
                   <div key={m.id} className="grid grid-cols-12 gap-3 px-4 py-3 text-sm">
                     <div className="col-span-3 text-slate-300">{formatDateTime(m.created_at)}</div>
@@ -453,10 +528,29 @@ export default function StockHistoryPage() {
                     <div className="col-span-3 text-slate-300 truncate" title={l?.name || ''}>
                       {l ? `${l.type === 'store' ? 'Loja' : 'Armazém'} · ${l.name}` : `#${m.location_id}`}
                     </div>
-                    <div className="col-span-1 text-slate-300">{m.movement_type}</div>
-                    <div className="col-span-1 text-right text-slate-100 font-semibold">{formatQty(m.qty_delta)}</div>
-                    <div className="col-span-1 text-right text-slate-400 truncate" title={ref}>
-                      {ref}
+                    <div className="col-span-1">
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${movementTypeColor(m.movement_type)}`}
+                        title={String(m.movement_type || '')}
+                      >
+                        {movementTypeLabel(m.movement_type)}
+                      </span>
+                    </div>
+                    <div className="col-span-1 text-right">
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums ${qtyColor(m.qty_delta)}`}
+                        title={formatQty(m.qty_delta)}
+                      >
+                        {formatQty(m.qty_delta)}
+                      </span>
+                    </div>
+                    <div className="col-span-1 text-right">
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${referenceColor(m.reference_type)}`}
+                        title={refText}
+                      >
+                        {refText}
+                      </span>
                     </div>
                     {m.notes ? <div className="col-span-12 -mt-1 text-xs text-slate-500">{m.notes}</div> : null}
                   </div>

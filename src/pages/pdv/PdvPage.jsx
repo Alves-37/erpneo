@@ -69,6 +69,7 @@ export default function PdvPage() {
   const setProductCache = useProductStore((s) => s.setCache)
 
   const [company, setCompany] = useState(null)
+  const [companies, setCompanies] = useState([])
   const [branch, setBranch] = useState(branchGlobal || null)
   const businessType = branch?.business_type || 'retail'
   const isRestaurant = businessType === 'restaurant'
@@ -244,10 +245,14 @@ export default function PdvPage() {
     for (const p of items || []) map.set(p.id, p)
     return map
   }, [items])
-
   const filteredItems = useMemo(() => {
     const query = String(q || '').trim().toLowerCase()
     let out = items || []
+
+    // Filtro por categoria
+    if (activeCategoryId) {
+      out = out.filter((p) => String(p.category_id) === activeCategoryId)
+    }
 
     if (query) {
       out = out.filter((p) => {
@@ -258,26 +263,25 @@ export default function PdvPage() {
       })
     }
 
-    if (activeCategoryId) {
-      const cid = Number(activeCategoryId)
-      out = out.filter((p) => Number(p.category_id || 0) === cid)
-    }
-
+    // Filtro de estoque para todos os tipos de negócio
     out = out.filter((p) => {
       const sku = String(p?.sku || '').trim().toUpperCase()
       if (sku === 'SERVICO_IMPRESSAO') return false
 
       const isService = Boolean(p?.is_service)
       const trackStock = Boolean(p?.track_stock)
+      
+      // Se não controla estoque ou é serviço, sempre mostra
       if (!trackStock || isService) return true
 
+      // Se controla estoque, verifica quantidade
       const stockQty = Number(p?.stock_qty ?? 0)
       if (!Number.isFinite(stockQty)) return true
       return stockQty > 0
     })
 
     return out
-  }, [items, activeCategoryId, q])
+  }, [items, activeCategoryId, q, isRestaurant])
 
   const cartLines = useMemo(() => {
     const lines = []
@@ -409,9 +413,10 @@ export default function PdvPage() {
     }
   }
 
-  async function loadProducts(query = q, { force = false, branchId } = {}) {
+  async function loadProducts(query = q, { force = false, branchId, businessType } = {}) {
     const role = (me?.role || '').toString().trim().toLowerCase()
     const isAdmin = role === 'admin' || role === 'owner'
+    const currentBusinessType = businessType || branch?.business_type || 'retail'
 
     const cacheKey = makeProductsCacheKey({
       companyId: me?.company_id,
@@ -434,6 +439,7 @@ export default function PdvPage() {
         limit: pageSize,
         offset,
         is_active: true,
+        show_in_menu: currentBusinessType.trim().toLowerCase() === 'restaurant' ? true : undefined,
         in_stock: false,
         establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
       })
@@ -441,21 +447,20 @@ export default function PdvPage() {
       all.push(...batch)
       if (batch.length < pageSize) break
     }
+    
     const next = all
     setItems(next)
     setProductCache(cacheKey, { items: next, query: String(query || ''), savedAt: Date.now() })
   }
 
-  async function loadInitial() {
+async function loadInitial() {
     setLoading(true)
     try {
       const [companies, b] = await Promise.all([listCompanies(), getMyBranch()])
-      const c = companies?.[0] || null
-      setCompany(c)
+      setCompanies(companies || [])
       setBranch(b)
-      setBranchGlobal(b, { persist: true })
       await loadCategories(b?.business_type || 'retail')
-      await loadProducts('', { force: false, branchId: b?.id })
+      await loadProducts('', { force: true, branchId: b?.id, businessType: b?.business_type })
     } catch {
       toast.error('Não foi possível carregar o PDV agora.')
     } finally {
