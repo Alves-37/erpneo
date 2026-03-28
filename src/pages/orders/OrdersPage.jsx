@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { closeOrder, createOrder, deleteOrder, listOrders, updateOrder } from '../../api/orders.js'
-import { listProductImages, listProducts } from '../../api/products.js'
-import { toast } from '../../services/toast.js'
+import { listCustomers } from '../../api/customers.js'
+import { getMyBranch } from '../../api/branches.js'
+import { listCompanies } from '../../api/companies.js'
+import { thermalPrinter } from '../../utils/thermalPrinter.js'
 import ProductOptionSelector from '../../components/ProductOptionSelector.jsx'
+import { toast } from '../../services/toast.js'
 
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
@@ -53,6 +56,10 @@ export default function OrdersPage() {
 
   const [openClose, setOpenClose] = useState(false)
   const [closingOrder, setClosingOrder] = useState(null)
+  
+  // Estados para modal de confirmação de impressão
+  const [openPrintConfirm, setOpenPrintConfirm] = useState(false)
+  const [printConfirmCallback, setPrintConfirmCallback] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [paid, setPaid] = useState('')
   const [saving, setSaving] = useState(false)
@@ -374,6 +381,12 @@ export default function OrdersPage() {
     try {
       await closeOrder(closingOrder.id, { payment_method: paymentMethod, paid: effectivePaid })
       toast.success('Pedido finalizado e venda registrada.')
+      
+      // Perguntar se deseja imprimir o recibo
+      setTimeout(() => {
+        showPrintConfirm(() => printReceiptAfterOrder(closingOrder))
+      }, 500)
+      
       setOpenClose(false)
       setClosingOrder(null)
       await load()
@@ -381,6 +394,57 @@ export default function OrdersPage() {
       toast.error('Não foi possível finalizar o pedido agora.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Função para mostrar modal de confirmação de impressão
+  function showPrintConfirm(callback) {
+    setPrintConfirmCallback(() => callback)
+    setOpenPrintConfirm(true)
+  }
+
+  // Função para imprimir recibo após finalizar pedido
+  async function printReceiptAfterOrder(order) {
+    try {
+      // Preparar dados do pedido para impressão
+      const saleData = {
+        sale: {
+          id: `PED-${order.id}`,
+          created_at: order.created_at || new Date().toISOString(),
+          subtotal: order.items?.reduce((sum, item) => sum + (item.qty * Number(item.price_at_order || 0)), 0) || 0,
+          discount: 0,
+          total: orderTotal,
+          payment_method: paymentMethod
+        },
+        items: order.items?.map(item => ({
+          name: item.product_name || `Produto #${item.product_id}`,
+          quantity: item.qty,
+          price_at_sale: Number(item.price_at_order || 0),
+          total: item.qty * Number(item.price_at_order || 0)
+        })) || [],
+        company: {
+          name: companies?.[0]?.name || 'ERPCRM - Sistema de Gestão',
+          address: companies?.[0]?.address || '',
+          phone: companies?.[0]?.phone || '',
+          document: companies?.[0]?.nuit ? `NUIT: ${companies[0].nuit}` : ''
+        },
+        customer: order.customer_name ? { name: order.customer_name } : null,
+        payment: {
+          method: paymentMethod,
+          amount_paid: paymentMethod === 'cash' ? effectivePaid : orderTotal,
+          change: paymentMethod === 'cash' ? (effectivePaid - orderTotal) : 0
+        }
+      }
+
+      const result = await thermalPrinter.printReceipt(saleData)
+      
+      if (result.success) {
+        toast.success('Recibo impresso com sucesso!')
+      } else {
+        toast.error(`Falha na impressão: ${result.error}`)
+      }
+    } catch (error) {
+      toast.error(`Erro ao imprimir: ${error.message}`)
     }
   }
 
@@ -943,6 +1007,46 @@ export default function OrdersPage() {
           onClose={() => setOptionsProduct(null)}
         />
       )}
+
+      {/* Modal de Confirmação de Impressão */}
+      <Modal 
+        open={openPrintConfirm} 
+        title="Confirmação de Impressão" 
+        onClose={() => setOpenPrintConfirm(false)}
+      >
+        <div className="space-y-4">
+          <div className="text-sm text-slate-200">
+            Deseja imprimir o recibo do pedido?
+          </div>
+          
+          <div className="text-xs text-slate-400">
+            O recibo será impresso na impressora térmica configurada nas configurações do sistema.
+          </div>
+          
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setOpenPrintConfirm(false)}
+              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-700"
+            >
+              Não
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (printConfirmCallback) {
+                  printConfirmCallback()
+                }
+                setOpenPrintConfirm(false)
+              }}
+              className="rounded-xl border border-brand-600 bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
+            >
+              Sim, imprimir
+            </button>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   )
 }

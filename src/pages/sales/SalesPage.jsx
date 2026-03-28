@@ -11,6 +11,7 @@ import { createExpense, payExpense } from '../../api/expenses.js'
 import { listExpenseCategories } from '../../api/expenseCategories.js'
 import { useAuthStore } from '../../store/authStore.js'
 import { toast } from '../../services/toast.js'
+import { thermalPrinter } from '../../utils/thermalPrinter.js'
 
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
@@ -884,6 +885,53 @@ export default function SalesPage() {
                   Emitido: <span className="font-semibold text-white">{issuedDoc.document_type}/{issuedDoc.series}/{issuedDoc.number}</span>
                 </div>
               ) : null}
+
+              {/* Botão de Impressão Térmica */}
+              <button
+                type="button"
+                disabled={!activeSale?.id}
+                onClick={async () => {
+                  if (!activeSale?.id) return
+                  
+                  try {
+                    // Preparar dados da venda para impressão
+                    const saleData = {
+                      sale: activeSale,
+                      items: activeSale.items || [],
+                      company: {
+                        name: 'ERPCRM - Sistema de Gestão',
+                        address: 'Endereço da Empresa',
+                        phone: '+258 84 123 4567',
+                        document: 'NUIT: 123456789'
+                      },
+                      customer: activeSale.customer || null,
+                      payment: {
+                        method: activeSale.payment_method || 'cash',
+                        amount_paid: activeSale.paid || activeSale.total,
+                        change: activeSale.change || 0
+                      }
+                    }
+
+                    toast.loading('Enviando para impressora...')
+                    
+                    const result = await thermalPrinter.printReceipt(saleData)
+                    
+                    if (result.success) {
+                      toast.success('Recibo impresso com sucesso!')
+                    } else {
+                      toast.error(`Falha na impressão: ${result.error}`)
+                    }
+                  } catch (error) {
+                    toast.error(`Erro ao imprimir: ${error.message}`)
+                  }
+                }}
+                className="rounded-xl border border-slate-600 bg-slate-700 hover:bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 flex items-center gap-2"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Imprimir Recibo
+              </button>
 
               <button
                 type="button"

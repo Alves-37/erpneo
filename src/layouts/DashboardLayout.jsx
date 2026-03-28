@@ -19,7 +19,7 @@ const nav = [
   { to: '/stock/history', label: 'Histórico de Stock' },
   { to: '/sales', label: 'Vendas' },
   { to: '/debts', label: 'Dívidas', hideForRestaurant: true },
-  { to: '/returns', label: 'Devoluções', hideForRestaurant: true },
+  { to: '/returns', label: 'Devoluções' },
   { to: '/pdv', label: 'PDV' },
   { to: '/orders', label: 'Pedidos', restaurantOnly: true },
   { to: '/tables', label: 'Mesas', restaurantOnly: true },

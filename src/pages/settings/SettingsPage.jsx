@@ -7,6 +7,7 @@ import { getMyBranch, listBranches, updateMyBranchPublicMenu } from '../../api/b
 import { changePassword, updateMe } from '../../api/me.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
+import { thermalPrinter } from '../../utils/thermalPrinter.js'
 
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
@@ -68,6 +69,23 @@ export default function SettingsPage() {
   const [openCompany, setOpenCompany] = useState(false)
   const [openProfile, setOpenProfile] = useState(false)
   const [openSecurity, setOpenSecurity] = useState(false)
+  const [openPrinter, setOpenPrinter] = useState(false)
+
+  // Estados da impressora
+  const [printerConfig, setPrinterConfig] = useState({
+    type: 'web', // web, bluetooth, escpos
+    paperWidth: 80, // 58mm, 80mm
+    autoPrint: false, // imprimir automaticamente após venda
+    copies: 1,
+    companyInfo: {
+      name: '',
+      address: '',
+      phone: '',
+      document: ''
+    }
+  })
+  const [testingPrinter, setTestingPrinter] = useState(false)
+  const [connectingPrinter, setConnectingPrinter] = useState(false)
   const [openPublicMenu, setOpenPublicMenu] = useState(false)
   const [openResetCompany, setOpenResetCompany] = useState(false)
 
@@ -117,6 +135,23 @@ export default function SettingsPage() {
         setProfileName(meRes?.name || '')
         setProfileEmail(meRes?.email || '')
         setProfileUsername(meRes?.username || '')
+
+        // Carregar configurações da impressora
+        const savedPrinterConfig = localStorage.getItem('printerConfig')
+        if (savedPrinterConfig) {
+          setPrinterConfig(JSON.parse(savedPrinterConfig))
+        } else {
+          // Usar dados da empresa como padrão
+          setPrinterConfig(prev => ({
+            ...prev,
+            companyInfo: {
+              name: c?.name || '',
+              address: c?.address || '',
+              phone: c?.phone || '',
+              document: c?.nuit ? `NUIT: ${c.nuit}` : ''
+            }
+          }))
+        }
       } catch {
         toast.error('Não foi possível carregar configurações agora.')
       }
@@ -356,6 +391,130 @@ export default function SettingsPage() {
     }
   }
 
+  // Funções da impressora
+  async function savePrinterConfig() {
+    localStorage.setItem('printerConfig', JSON.stringify(printerConfig))
+    toast.success('Configurações da impressora salvas!')
+  }
+
+  async function testPrinter() {
+    setTestingPrinter(true)
+    try {
+      // Dados de teste
+      const testData = {
+        sale: {
+          id: 'TEST-001',
+          created_at: new Date().toISOString(),
+          subtotal: 1230.00,
+          discount: 50.00,
+          total: 1180.00,
+          payment_method: 'cash'
+        },
+        items: [
+          {
+            name: 'Hambúrguer Simples',
+            quantity: 2,
+            price_at_sale: 120.00,
+            total: 240.00
+          },
+          {
+            name: 'Refrigerante Lata',
+            quantity: 3,
+            price_at_sale: 45.00,
+            total: 135.00
+          },
+          {
+            name: 'Batata Frita',
+            quantity: 1,
+            price_at_sale: 80.00,
+            total: 80.00
+          },
+          {
+            name: 'Suco Natural',
+            quantity: 2,
+            price_at_sale: 60.00,
+            total: 120.00
+          },
+          {
+            name: 'Salada Caesar',
+            quantity: 1,
+            price_at_sale: 150.00,
+            total: 150.00
+          },
+          {
+            name: 'Sopa do Dia',
+            quantity: 2,
+            price_at_sale: 75.00,
+            total: 150.00
+          },
+          {
+            name: 'Pizza Fatia',
+            quantity: 1,
+            price_at_sale: 100.00,
+            total: 100.00
+          },
+          {
+            name: 'Sorvete',
+            quantity: 1,
+            price_at_sale: 65.00,
+            total: 65.00
+          },
+          {
+            name: 'Café Expresso',
+            quantity: 3,
+            price_at_sale: 40.00,
+            total: 120.00
+          },
+          {
+            name: 'Pastel de Nata',
+            quantity: 2,
+            price_at_sale: 35.00,
+            total: 70.00
+          }
+        ],
+        company: printerConfig.companyInfo,
+        customer: {
+          name: 'Cliente Teste'
+        },
+        payment: {
+          method: 'cash',
+          amount_paid: 1200.00,
+          change: 20.00
+        }
+      }
+
+      const result = await thermalPrinter.printReceipt(testData)
+      
+      if (result.success) {
+        toast.success('Teste de impressão realizado com sucesso!')
+      } else {
+        toast.error(`Falha no teste: ${result.error}`)
+      }
+    } catch (error) {
+      toast.error(`Erro no teste: ${error.message}`)
+    } finally {
+      setTestingPrinter(false)
+    }
+  }
+
+  async function connectBluetoothPrinter() {
+    setConnectingPrinter(true)
+    try {
+      const result = await thermalPrinter.connectBluetoothPrinter()
+      
+      if (result.success) {
+        toast.success('Impressora Bluetooth conectada!')
+        setPrinterConfig(prev => ({ ...prev, type: 'bluetooth' }))
+      } else {
+        toast.error(`Falha na conexão: ${result.error}`)
+      }
+    } catch (error) {
+      toast.error(`Erro na conexão: ${error.message}`)
+    } finally {
+      setConnectingPrinter(false)
+    }
+  }
+
   return (
     <div>
       {resetRunning ? (
@@ -427,6 +586,27 @@ export default function SettingsPage() {
               type="button"
             >
               Trocar senha
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="text-sm font-semibold text-white">🖨️ Impressora Térmica</div>
+          <div className="mt-2 text-sm text-slate-300">
+            <div className="text-slate-100 font-medium">
+              {printerConfig.type === 'web' && 'Impressora Padrão (USB/Rede)'}
+              {printerConfig.type === 'bluetooth' && 'Impressora Bluetooth'}
+              {printerConfig.type === 'escpos' && 'Impressora ESC/POS'}
+            </div>
+            <div className="text-slate-400 text-xs mt-1">Papel: {printerConfig.paperWidth}mm</div>
+          </div>
+          <div className="mt-4">
+            <button
+              onClick={() => setOpenPrinter(true)}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white"
+              type="button"
+            >
+              Configurar impressora
             </button>
           </div>
         </div>
@@ -748,6 +928,114 @@ export default function SettingsPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal de Configuração da Impressora */}
+      <Modal open={openPrinter} title="Configurar Impressora Térmica" onClose={() => setOpenPrinter(false)}>
+        <div className="space-y-6">
+          {/* Tipo de Impressora */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Tipo de Impressora
+            </label>
+            <select
+              value={printerConfig.type}
+              onChange={(e) => setPrinterConfig(prev => ({ ...prev, type: e.target.value }))}
+              className="w-full rounded-lg border border-slate-600 bg-slate-800 text-white px-3 py-2"
+            >
+              <option value="web">Impressora Padrão (Web)</option>
+              <option value="bluetooth">Impressora Bluetooth</option>
+              <option value="escpos">Impressora ESC/POS</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-400">
+              {printerConfig.type === 'web' && 'Usa impressora conectada ao sistema (USB/Rede)'}
+              {printerConfig.type === 'bluetooth' && 'Conecta impressoras térmicas via Bluetooth'}
+              {printerConfig.type === 'escpos' && 'Para impressoras térmicas compatíveis com ESC/POS'}
+            </p>
+          </div>
+
+          {/* Largura do Papel */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Largura do Papel
+            </label>
+            <select
+              value={printerConfig.paperWidth}
+              onChange={(e) => setPrinterConfig(prev => ({ ...prev, paperWidth: Number(e.target.value) }))}
+              className="w-full rounded-lg border border-slate-600 bg-slate-800 text-white px-3 py-2"
+            >
+              <option value={58}>58mm</option>
+              <option value={80}>80mm (Padrão)</option>
+            </select>
+          </div>
+
+          {/* Configurações Adicionais */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={printerConfig.autoPrint}
+                onChange={(e) => setPrinterConfig(prev => ({ ...prev, autoPrint: e.target.checked }))}
+                className="rounded border-slate-600 bg-slate-800 text-brand-500"
+              />
+              <span className="text-sm text-slate-300">Imprimir automaticamente após venda</span>
+            </label>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Número de Cópias
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="5"
+                value={printerConfig.copies}
+                onChange={(e) => setPrinterConfig(prev => ({ ...prev, copies: Number(e.target.value) }))}
+                className="w-full rounded-lg border border-slate-600 bg-slate-800 text-white px-3 py-2"
+              />
+            </div>
+          </div>
+
+          
+          {/* Botões de Ação */}
+          <div className="flex gap-3">
+            <button
+              onClick={savePrinterConfig}
+              className="rounded-xl border border-brand-600 bg-brand-600 hover:bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              Salvar Configurações
+            </button>
+            
+            <button
+              onClick={testPrinter}
+              disabled={testingPrinter}
+              className="rounded-xl border border-slate-600 bg-slate-700 hover:bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {testingPrinter ? 'Testando...' : 'Imprimir Teste'}
+            </button>
+            
+            {printerConfig.type === 'bluetooth' && (
+              <button
+                onClick={connectBluetoothPrinter}
+                disabled={connectingPrinter}
+                className="rounded-xl border border-blue-600 bg-blue-600 hover:bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {connectingPrinter ? 'Conectando...' : 'Conectar Bluetooth'}
+              </button>
+            )}
+          </div>
+
+          {/* Informações Adicionais */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <h4 className="text-sm font-medium text-slate-300 mb-2">📋 Informações Importantes</h4>
+            <ul className="text-sm text-slate-400 space-y-1">
+              <li>• <strong>Impressão Web:</strong> Funciona com impressoras USB/Rede conectadas ao computador</li>
+              <li>• <strong>Bluetooth:</strong> Requer navegador compatível com Web Bluetooth API (Chrome/Edge)</li>
+              <li>• <strong>ESC/POS:</strong> Padrão da indústria para impressoras térmicas</li>
+              <li>• <strong>Teste:</strong> Sempre teste antes de usar em produção</li>
+            </ul>
+          </div>
+        </div>
       </Modal>
 
       <Modal open={openPublicMenu} title="Configurar menu público (restaurante)" onClose={() => (savingPublicMenu ? null : setOpenPublicMenu(false))}>

@@ -106,7 +106,6 @@ export default function ReturnsPage() {
   }, [])
 
   useEffect(() => {
-    if (isRestaurant) return
     loadSales()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branch?.id])
@@ -218,17 +217,6 @@ export default function ReturnsPage() {
     } finally {
       setEditing(false)
     }
-  }
-
-  if (isRestaurant) {
-    return (
-      <div className="h-[calc(100vh-56px-48px)] overflow-hidden flex flex-col">
-        <div>
-          <div className="text-lg sm:text-xl font-semibold">Devoluções</div>
-          <div className="mt-2 text-sm text-slate-300">Funcionalidade indisponível para restaurante.</div>
-        </div>
-      </div>
-    )
   }
 
   return (

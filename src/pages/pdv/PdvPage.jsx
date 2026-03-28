@@ -12,6 +12,7 @@ import { createSale } from '../../api/sales.js'
 import { createDebt } from '../../api/debts.js'
 import { convertQuoteToSale, createQuote, deleteQuote, listQuotes, updateQuote } from '../../api/quotes.js'
 import { closeCashSession, getCurrentCashSession, getCashSessionSummary, openCashSession } from '../../api/cashSessions.js'
+import { thermalPrinter } from '../../utils/thermalPrinter.js'
 import { createCustomer, listCustomers } from '../../api/customers.js'
 import { downloadQuotePdf } from '../../api/quotes.js'
 import { toast } from '../../services/toast.js'
@@ -97,6 +98,11 @@ export default function PdvPage() {
   const [tables, setTables] = useState([])
   const [occupiedSeatsByTable, setOccupiedSeatsByTable] = useState({})
   const [openSeatModal, setOpenSeatModal] = useState(false)
+  const [seatProduct, setSeatProduct] = useState(null)
+
+  const [openPrintConfirm, setOpenPrintConfirm] = useState(false)
+  const [printConfirmType, setPrintConfirmType] = useState('') // 'venda', 'pedido', 'divida'
+  const [printConfirmCallback, setPrintConfirmCallback] = useState(null)
 
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [paid, setPaid] = useState('')
@@ -935,6 +941,11 @@ async function loadInitial() {
           })),
         })
         toast.success('Pedido enviado com sucesso.')
+        
+        // Perguntar se deseja imprimir o comprovante do pedido
+        setTimeout(() => {
+          showPrintConfirm('pedido', printReceiptAfterSale)
+        }, 500)
 
         setTableNumber('')
         setSeatNumber('1')
@@ -958,6 +969,11 @@ async function loadInitial() {
             })),
           })
           toast.success('Dívida registrada com sucesso.')
+          
+          // Perguntar se deseja imprimir o comprovante da dívida
+          setTimeout(() => {
+            showPrintConfirm('divida', printReceiptAfterSale)
+          }, 500)
         } else {
           await createSale({
             sale_channel: normalizedChannel,
@@ -975,6 +991,11 @@ async function loadInitial() {
             })),
           })
           toast.success('Venda registrada com sucesso.')
+          
+          // Perguntar se deseja imprimir o recibo
+          setTimeout(() => {
+            showPrintConfirm('venda', printReceiptAfterSale)
+          }, 500)
         }
       }
       setOpenConfirm(false)
@@ -993,6 +1014,58 @@ async function loadInitial() {
       toast.error(isRestaurant && normalizedChannel === 'table' ? 'Não foi possível processar o pedido agora.' : 'Não foi possível finalizar a venda agora.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Função para mostrar modal de confirmação de impressão
+  function showPrintConfirm(type, callback) {
+    setPrintConfirmType(type)
+    setPrintConfirmCallback(() => callback)
+    setOpenPrintConfirm(true)
+  }
+
+  // Função para imprimir recibo após venda/pedido
+  async function printReceiptAfterSale() {
+    try {
+      // Preparar dados da venda para impressão
+      const saleData = {
+        sale: {
+          id: 'REC-' + Date.now(),
+          created_at: new Date().toISOString(),
+          subtotal: cartLines.reduce((sum, item) => sum + (item.qty * Number(item.product.price || 0)), 0),
+          discount: Number(discount || 0),
+          total: finalTotal,
+          payment_method: paymentMethod
+        },
+        items: cartLines.map(item => ({
+          name: item.product.name,
+          quantity: item.qty,
+          price_at_sale: Number(item.product.price || 0),
+          total: item.qty * Number(item.product.price || 0)
+        })),
+        company: {
+          name: companies?.[0]?.name || 'ERPCRM - Sistema de Gestão',
+          address: companies?.[0]?.address || '',
+          phone: companies?.[0]?.phone || '',
+          document: companies?.[0]?.nuit ? `NUIT: ${companies[0].nuit}` : ''
+        },
+        customer: selectedCustomerId ? { name: customers?.find(c => c.id === selectedCustomerId)?.name } : null,
+        payment: {
+          method: paymentMethod,
+          amount_paid: paymentMethod === 'cash' ? effectivePaidNum : finalTotal,
+          change: paymentMethod === 'cash' ? (effectivePaidNum - finalTotal) : 0
+        }
+      }
+
+      const result = await thermalPrinter.printReceipt(saleData)
+      
+      if (result.success) {
+        toast.success('Recibo impresso com sucesso!')
+      } else {
+        toast.error(`Falha na impressão: ${result.error}`)
+      }
+    } catch (error) {
+      toast.error(`Erro ao imprimir: ${error.message}`)
     }
   }
 
@@ -2490,6 +2563,47 @@ async function loadInitial() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Modal de Confirmação de Impressão */}
+      <Modal 
+        open={openPrintConfirm} 
+        title="Confirmação de Impressão" 
+        onClose={() => setOpenPrintConfirm(false)}
+      >
+        <div className="space-y-4">
+          <div className="text-sm text-slate-200">
+            {printConfirmType === 'venda' && 'Deseja imprimir o recibo da venda?'}
+            {printConfirmType === 'pedido' && 'Deseja imprimir o comprovante do pedido?'}
+            {printConfirmType === 'divida' && 'Deseja imprimir o comprovante da dívida?'}
+          </div>
+          
+          <div className="text-xs text-slate-400">
+            O recibo será impresso na impressora térmica configurada nas configurações do sistema.
+          </div>
+          
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setOpenPrintConfirm(false)}
+              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-700"
+            >
+              Não
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (printConfirmCallback) {
+                  printConfirmCallback()
+                }
+                setOpenPrintConfirm(false)
+              }}
+              className="rounded-xl border border-brand-600 bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
+            >
+              Sim, imprimir
+            </button>
+          </div>
+        </div>
       </Modal>
 
     </div>
