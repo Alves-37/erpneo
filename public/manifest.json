@@ -1,0 +1,60 @@
+{
+  "name": "ERPCRM - Sistema de Gestão",
+  "short_name": "ERPCRM",
+  "description": "Sistema completo de gestão para restaurantes e varejo",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0ea5e9",
+  "orientation": "any",
+  "scope": "/",
+  "lang": "pt-BR",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    {
+      "src": "/icon-simple.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "PDV - Ponto de Venda",
+      "short_name": "PDV",
+      "description": "Acessar o ponto de venda",
+      "url": "/pdv",
+      "icons": [{ "src": "/icon-simple.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Pedidos",
+      "short_name": "Pedidos",
+      "description": "Gerenciar pedidos do restaurante",
+      "url": "/orders",
+      "icons": [{ "src": "/icon-simple.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Produtos",
+      "short_name": "Produtos",
+      "description": "Gerenciar produtos e estoque",
+      "url": "/products",
+      "icons": [{ "src": "/icon-simple.svg", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop-1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Dashboard principal do sistema"
+    },
+    {
+      "src": "/screenshots/mobile-1.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "PDV no celular"
+    }
+  ]
+}
