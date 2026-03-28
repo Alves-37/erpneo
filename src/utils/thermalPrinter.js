@@ -5,7 +5,8 @@ class ThermalPrinter {
   constructor() {
     this.printerType = null; // 'web', 'bluetooth', 'escpos'
     this.isConnected = false;
-    this.paperWidth = 80; // 80mm padrão
+    this.paperWidth = 58; // 58mm formato compacto (tamanho pequeno)
+    this.printerModel = 'gainscha-ga-e200'; // Modelo específico
   }
 
   // 🖨️ Opção 1: Web Print API (Chrome/Edge)
@@ -39,7 +40,7 @@ class ThermalPrinter {
     }
   }
 
-  // 📱 Opção 2: Bluetooth (para mobile)
+  // 📱 Opção 2: Bluetooth (para mobile) - Otimizado para Gainscha GA-E200
   async connectBluetoothPrinter() {
     try {
       // Verificar suporte a Web Bluetooth API
@@ -47,12 +48,15 @@ class ThermalPrinter {
         throw new Error('Navegador não suporta Web Bluetooth API');
       }
 
-      // Solicitar dispositivo Bluetooth
+      // Solicitar dispositivo Bluetooth Gainscha específico
       const device = await navigator.bluetooth.requestDevice({
         filters: [
           { services: ['000018f0-0000-1000-8000-00805f9b34fb'] }, // ESC/POS Service
+          { namePrefix: 'GA-E200' }, // Gainscha GA-E200
+          { namePrefix: 'Gainscha' },
           { namePrefix: 'Printer' }
-        ]
+        ],
+        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
       });
 
       // Conectar ao dispositivo
@@ -64,28 +68,136 @@ class ThermalPrinter {
       this.isConnected = true;
       this.device = device;
       this.characteristic = characteristic;
+      this.printerModel = 'gainscha-ga-e200';
 
-      return { success: true, message: 'Impressora Bluetooth conectada!' };
+      return { success: true, message: 'Impressora Gainscha GA-E200 conectada via Bluetooth!' };
     } catch (error) {
       return { success: false, error: error.message };
     }
   }
 
-  // 🔌 Opção 3: ESC/POS Direct (via USB/Rede)
+  // 🔌 Opção 3: ESC/POS Direct (via USB/Rede) - Otimizado para Gainscha GA-E200
   async printWithESCPOS(saleData) {
     try {
       const commands = this.generateESCPOSCommands(saleData);
       
-      // Enviar comandos para impressora
-      // Implementação depende do método (USB, Rede, Serial)
-      
-      return { success: true, message: 'Comandos ESC/POS enviados!' };
+      // Para Gainscha GA-E200, tentar diferentes métodos de conexão
+      if (this.printerType === 'bluetooth' && this.characteristic) {
+        // Envia via Bluetooth
+        for (const command of commands) {
+          await this.characteristic.writeValue(command);
+        }
+        return { success: true, message: 'Impresso via Bluetooth Gainscha GA-E200!' };
+      } else {
+        // Para USB/Rede - requer implementação específica
+        // Aqui poderíamos usar WebUSB, WebSocket ou outro método
+        console.log('Comandos ESC/POS gerados para Gainscha GA-E200:', commands);
+        return { success: true, message: 'Comandos ESC/POS gerados para Gainscha GA-E200!' };
+      }
     } catch (error) {
       return { success: false, error: error.message };
     }
   }
 
-  // 📄 Gerar HTML para impressão Web
+  // 🖨️ Método específico para Gainscha GA-E200
+  async connectGainschaPrinter() {
+    try {
+      // Tentar conexão via USB (WebUSB)
+      if ('usb' in navigator) {
+        const device = await navigator.usb.requestDevice({
+          filters: [
+            { vendorId: 0x0483 }, // Vendor ID Gainscha (exemplo)
+            { productId: 0x5740 } // Product ID GA-E200 (exemplo)
+          ]
+        });
+
+        await device.open();
+        await device.claimInterface(0);
+
+        this.printerType = 'usb';
+        this.isConnected = true;
+        this.device = device;
+        this.printerModel = 'gainscha-ga-e200';
+
+        return { success: true, message: 'Impressora Gainscha GA-E200 conectada via USB!' };
+      } else {
+        // Fallback para Bluetooth
+        return await this.connectBluetoothPrinter();
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // � Reset forçado da impressora (resolver problema de papel longo)
+  async resetPrinter() {
+    try {
+      let commands = [];
+      
+      // Comandos de reset completo
+      commands.push(Buffer.from([0x1B, 0x40])); // ESC @ - Initialize printer
+      commands.push(Buffer.from([0x1B, 0x4D, 0x00])); // ESC M 0 - Fonte A padrão
+      commands.push(Buffer.from([0x1B, 0x21, 0x00])); // ESC ! 0 - Reset formatação
+      commands.push(Buffer.from([0x1B, 0x61, 0x00])); // ESC a 0 - Alinhamento esquerda
+      commands.push(Buffer.from([0x1B, 0x50, 0x00])); // ESC P 0 - Desabilitar modo página
+      commands.push(Buffer.from([0x1B, 0x4A, 0x00])); // ESC J 0 - Sem avanço de linha
+      commands.push(Buffer.from([0x1B, 0x64, 0x00])); // ESC d 0 - Sem avanço de linha
+      
+      // Enviar comandos de reset
+      if (this.printerType === 'bluetooth' && this.characteristic) {
+        for (const command of commands) {
+          await this.characteristic.writeValue(command);
+        }
+      } else if (this.printerType === 'usb' && this.device) {
+        for (const command of commands) {
+          await this.device.transferOut(1, command);
+        }
+      }
+      
+      // Teste com uma linha simples
+      const testCommands = [
+        Buffer.from([0x1B, 0x40]), // Reset
+        Buffer.from('TESTE RESET\n'),
+        Buffer.from([0x1D, 0x56, 0x01]) // Partial cut
+      ];
+      
+      if (this.printerType === 'bluetooth' && this.characteristic) {
+        for (const command of testCommands) {
+          await this.characteristic.writeValue(command);
+        }
+      } else if (this.printerType === 'usb' && this.device) {
+        for (const command of testCommands) {
+          await this.device.transferOut(1, command);
+        }
+      }
+      
+      return { success: true, message: 'Impressora resetada com sucesso!' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // � Imprimir via USB para Gainscha
+  async printViaUSB(saleData) {
+    try {
+      const commands = this.generateESCPOSCommands(saleData);
+      
+      if (!this.device || this.printerType !== 'usb') {
+        throw new Error('Impressora USB não conectada');
+      }
+
+      // Enviar comandos via USB
+      for (const command of commands) {
+        await this.device.transferOut(1, command);
+      }
+
+      return { success: true, message: 'Impresso via USB Gainscha GA-E200!' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 📄 Gerar HTML para impressão Web (Formato Compacto para Gainscha GA-E200)
   generateReceiptHTML(saleData) {
     const { sale, items, company, customer, payment } = saleData;
     
@@ -97,84 +209,77 @@ class ThermalPrinter {
       <title>Recibo - ${company.name}</title>
       <style>
         @media print {
+          @page {
+            size: 58mm 297mm;
+            margin: 2mm;
+          }
           body { 
             margin: 0; 
-            padding: 10px;
+            padding: 2px;
             font-family: 'Courier New', monospace;
-            font-size: 12px;
-            width: 80mm;
+            font-size: 8px;
+            width: 54mm; /* 58mm - margens */
+            line-height: 1.0;
           }
           .no-print { display: none; }
           .receipt {
-            max-width: 80mm;
-            margin: 0 auto;
+            width: 100%;
+            margin: 0;
             text-align: center;
           }
           .center { text-align: center; }
           .bold { font-weight: bold; }
-          .border-top { border-top: 1px dashed #000; margin-top: 10px; padding-top: 10px; }
-          .border-bottom { border-bottom: 1px dashed #000; margin-bottom: 10px; padding-bottom: 10px; }
-          .item { display: flex; justify-content: space-between; margin: 5px 0; text-align: left; }
-          .total { font-weight: bold; font-size: 14px; }
+          .border-top { border-top: 1px dashed #000; margin-top: 3px; padding-top: 3px; }
+          .border-bottom { border-bottom: 1px dashed #000; margin-bottom: 3px; padding-bottom: 3px; }
+          .item { display: flex; justify-content: space-between; margin: 1px 0; text-align: left; }
+          .total { font-weight: bold; font-size: 9px; }
           .left-align { text-align: left; }
           .right-align { text-align: right; }
+          .company-name { font-size: 10px; font-weight: bold; margin-bottom: 2px; }
+          .title { font-size: 9px; font-weight: bold; margin: 2px 0; }
+          .small { font-size: 7px; }
+          .tiny { font-size: 6px; }
+          .compact { margin: 1px 0; }
         }
       </style>
     </head>
     <body>
       <div class="receipt">
-        <!-- Cabeçalho Centralizado -->
+        <!-- Cabeçalho Compacto -->
         <div class="center">
-          <h2 class="bold">${company.name}</h2>
-          <p>${company.address || ''}</p>
-          <p>${company.phone || ''}</p>
-          <p>${company.document || ''}</p>
+          <div class="company-name">${company.name}</div>
+          ${company.phone ? `<div class="tiny">${company.phone}</div>` : ''}
         </div>
         
         <div class="border-bottom"></div>
         
-        <!-- Informações da Venda Centralizadas -->
+        <!-- Informações Compactas -->
         <div class="center">
-          <p><strong>RECIBO DE VENDA</strong></p>
-          <p>Nº: ${sale.id}</p>
-          <p>Data: ${new Date(sale.created_at).toLocaleString('pt-BR')}</p>
+          <div class="title">RECIBO</div>
+          <div class="tiny">#${sale.id} ${new Date(sale.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</div>
         </div>
         
-        <div class="border-bottom"></div>
-        
-        <!-- Cliente Centralizado -->
         ${customer ? `
-        <div class="center">
-          <p><strong>Cliente:</strong> ${customer.name}</p>
-        </div>
         <div class="border-bottom"></div>
+        <div class="center compact">
+          <div class="small">${customer.name}</div>
+        </div>
         ` : ''}
         
-        <!-- Itens -->
+        <!-- Itens Compactos -->
         <div class="left-align">
           ${items.map(item => `
-            <div class="item">
-              <span>${item.quantity}x ${item.name}</span>
-              <span>${item.total.toFixed(2)} MT</span>
+            <div class="item compact">
+              <span class="small">${item.quantity}x ${item.name.length > 15 ? item.name.substring(0, 15) + '...' : item.name}</span>
+              <span>${item.total.toFixed(2)}</span>
             </div>
-            ${item.notes ? `<div style="font-size: 10px; margin-left: 10px;">Obs: ${item.notes}</div>` : ''}
           `).join('')}
         </div>
         
         <div class="border-top"></div>
         
-        <!-- Totais -->
+        <!-- Totais Compactos -->
         <div>
-          <div class="item">
-            <span>Subtotal:</span>
-            <span>${sale.subtotal.toFixed(2)} MT</span>
-          </div>
-          ${sale.discount > 0 ? `
-          <div class="item">
-            <span>Desconto:</span>
-            <span>-${sale.discount.toFixed(2)} MT</span>
-          </div>
-          ` : ''}
           <div class="item total">
             <span>TOTAL:</span>
             <span>${sale.total.toFixed(2)} MT</span>
@@ -183,30 +288,19 @@ class ThermalPrinter {
         
         <div class="border-top"></div>
         
-        <!-- Pagamento Centralizado -->
-        <div class="center">
-          <p><strong>Pagamento:</strong> ${this.getPaymentMethodText(payment.method)}</p>
-          ${payment.amount_paid ? `<p>Valor Pago: ${payment.amount_paid.toFixed(2)} MT</p>` : ''}
-          ${payment.change ? `<p>Troco: ${payment.change.toFixed(2)} MT</p>` : ''}
+        <!-- Pagamento Compacto -->
+        <div class="center compact">
+          <div class="small">${this.getPaymentMethodText(payment.method)}</div>
+          ${payment.change ? `<div class="tiny">Troco: ${payment.change.toFixed(2)}</div>` : ''}
         </div>
         
         <div class="border-bottom"></div>
         
-        <!-- Rodapé Centralizado -->
+        <!-- Rodapé Mínimo -->
         <div class="center">
-          <p>Obrigado pela preferência!</p>
-          <p>Volte sempre!</p>
-          <p style="font-size: 10px;">${new Date().toLocaleString('pt-BR')}</p>
+          <div class="tiny">Obrigado!</div>
+          <div class="tiny">${new Date().toLocaleDateString('pt-BR')}</div>
         </div>
-        
-        <!-- Informações fiscais se necessário -->
-        ${sale.fiscal_document ? `
-        <div class="border-top"></div>
-        <div class="center">
-          <p style="font-size: 10px;">${sale.fiscal_document.type} ${sale.fiscal_document.number}</p>
-          <p style="font-size: 10px;">${sale.fiscal_document.access_key || ''}</p>
-        </div>
-        ` : ''}
       </div>
       
       <script class="no-print">
@@ -214,7 +308,7 @@ class ThermalPrinter {
           setTimeout(() => {
             window.print();
             window.close();
-          }, 500);
+          }, 300);
         };
       </script>
     </body>
@@ -222,102 +316,112 @@ class ThermalPrinter {
     `;
   }
 
-  // 🔌 Gerar comandos ESC/POS
+  // 🔌 Gerar comandos ESC/POS (Formato Ultra-Compacto para Gainscha GA-E200)
   generateESCPOSCommands(saleData) {
     const { sale, items, company, customer, payment } = saleData;
     let commands = [];
 
-    // Inicialização
+    // Inicialização e reset completo da impressora
     commands.push(Buffer.from([0x1B, 0x40])); // ESC @ - Initialize printer
+    
+    // Reset de configurações de papel
+    commands.push(Buffer.from([0x1B, 0x4D, 0x00])); // ESC M 0 - Fonte A (padrão)
+    
+    // Definir codificação de caracteres para suporte português
+    commands.push(Buffer.from([0x1B, 0x74, 0x02])); // ESC t 2 - PC860 (Português)
+    
+    // Desabilitar modo de página (evitar avanço excessivo)
+    commands.push(Buffer.from([0x1B, 0x50, 0x00])); // ESC P 0 - Desabilitar modo página
+    
+    // Definir área de impressão (limitar a 58mm)
+    commands.push(Buffer.from([0x1D, 0x28, 0x43])); // GS (C - Definir área de impressão
+    
+    // Fonte pequena
+    commands.push(Buffer.from([0x1B, 0x21, 0x01])); // ESC ! 1 - Small font
 
     // Centralizar
     commands.push(Buffer.from([0x1B, 0x61, 0x01])); // ESC a 1 - Center align
 
-    // Cabeçalho Centralizado
-    commands.push(Buffer.from([0x1B, 0x61, 0x01])); // ESC a 1 - Center align
+    // Cabeçalho Ultra-Compacto
+    commands.push(Buffer.from([0x1B, 0x45, 0x01])); // ESC E 1 - Bold on
     commands.push(Buffer.from(company.name + '\n'));
-    commands.push(Buffer.from((company.address || '') + '\n'));
-    commands.push(Buffer.from((company.phone || '') + '\n'));
-    commands.push(Buffer.from((company.document || '') + '\n'));
+    commands.push(Buffer.from([0x1B, 0x45, 0x00])); // ESC E 0 - Bold off
+    
+    if (company.phone) {
+      commands.push(Buffer.from([0x1B, 0x21, 0x00])); // ESC ! 0 - Tiny font
+      commands.push(Buffer.from(company.phone + '\n'));
+      commands.push(Buffer.from([0x1B, 0x21, 0x01])); // ESC ! 1 - Small font
+    }
 
-    // Linha separadora
-    commands.push(Buffer.from('--------------------------------\n'));
+    // Linha separadora muito curta
+    commands.push(Buffer.from('------------------\n'));
 
-    // Título Centralizado
-    commands.push(Buffer.from('RECIBO DE VENDA\n'));
-    commands.push(Buffer.from(`Nº: ${sale.id}\n`));
-    commands.push(Buffer.from(`Data: ${new Date(sale.created_at).toLocaleString('pt-BR')}\n`));
+    // Título Ultra-Compacto
+    commands.push(Buffer.from([0x1B, 0x45, 0x01])); // ESC E 1 - Bold on
+    commands.push(Buffer.from('RECIBO\n'));
+    commands.push(Buffer.from([0x1B, 0x45, 0x00])); // ESC E 0 - Bold off
+    
+    commands.push(Buffer.from(`#${sale.id} ${new Date(sale.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}\n`));
 
-    // Linha separadora
-    commands.push(Buffer.from('--------------------------------\n'));
-
-    // Cliente Centralizado
+    // Cliente compacto
     if (customer) {
-      commands.push(Buffer.from(`Cliente: ${customer.name}\n`));
-      commands.push(Buffer.from('--------------------------------\n'));
+      commands.push(Buffer.from('------------------\n'));
+      commands.push(Buffer.from([0x1B, 0x21, 0x00])); // ESC ! 0 - Tiny font
+      commands.push(Buffer.from(customer.name + '\n'));
+      commands.push(Buffer.from([0x1B, 0x21, 0x01])); // ESC ! 1 - Small font
     }
 
     // Alinhar à esquerda
     commands.push(Buffer.from([0x1B, 0x61, 0x00])); // ESC a 0 - Left align
 
-    // Itens
+    // Itens ultra-compactos (máximo 28 caracteres por linha)
     items.forEach(item => {
-      const itemLine = `${item.quantity}x ${item.name}`;
+      const itemName = item.name.length > 18 ? item.name.substring(0, 18) + '...' : item.name;
+      const itemLine = `${item.quantity}x ${itemName}`;
       const priceLine = `${item.total.toFixed(2)} MT`;
       
-      commands.push(Buffer.from(itemLine + '\n'));
-      if (item.notes) {
-        commands.push(Buffer.from(`  Obs: ${item.notes}\n`));
-      }
-      commands.push(Buffer.from(priceLine.padStart(32) + '\n'));
+      // Ajustar para 28 caracteres totais
+      const availableSpace = 28 - itemLine.length;
+      const paddedPrice = priceLine.padStart(availableSpace);
+      
+      commands.push(Buffer.from(itemLine + paddedPrice + '\n'));
     });
 
     // Linha separadora
-    commands.push(Buffer.from('--------------------------------\n'));
+    commands.push(Buffer.from('------------------\n'));
 
-    // Totais
-    commands.push(Buffer.from(`Subtotal: ${sale.subtotal.toFixed(2)} MT\n`));
-    if (sale.discount > 0) {
-      commands.push(Buffer.from(`Desconto: -${sale.discount.toFixed(2)} MT\n`));
-    }
-    
-    // Negrito para total
+    // Total ultra-compacto
     commands.push(Buffer.from([0x1B, 0x45, 0x01])); // ESC E 1 - Bold on
     commands.push(Buffer.from(`TOTAL: ${sale.total.toFixed(2)} MT\n`));
     commands.push(Buffer.from([0x1B, 0x45, 0x00])); // ESC E 0 - Bold off
 
     // Linha separadora
-    commands.push(Buffer.from('--------------------------------\n'));
+    commands.push(Buffer.from('------------------\n'));
 
-    // Pagamento Centralizado
+    // Pagamento ultra-compacto
     commands.push(Buffer.from([0x1B, 0x61, 0x01])); // ESC a 1 - Center align
-    commands.push(Buffer.from(`Pagamento: ${this.getPaymentMethodText(payment.method)}\n`));
-    if (payment.amount_paid) {
-      commands.push(Buffer.from(`Valor Pago: ${payment.amount_paid.toFixed(2)} MT\n`));
-    }
+    commands.push(Buffer.from([0x1B, 0x21, 0x00])); // ESC ! 0 - Tiny font
+    commands.push(Buffer.from(this.getPaymentMethodText(payment.method) + '\n'));
     if (payment.change) {
-      commands.push(Buffer.from(`Troco: ${payment.change.toFixed(2)} MT\n`));
+      commands.push(Buffer.from(`Troco: ${payment.change.toFixed(2)}\n`));
     }
 
-    // Linha separadora
-    commands.push(Buffer.from('--------------------------------\n'));
+    // Linha separadora final
+    commands.push(Buffer.from('------------------\n'));
 
-    // Rodapé
-    commands.push(Buffer.from('Obrigado pela preferência!\n'));
-    commands.push(Buffer.from('Volte sempre!\n'));
-    commands.push(Buffer.from(new Date().toLocaleString('pt-BR') + '\n'));
+    // Rodapé mínimo
+    commands.push(Buffer.from('Obrigado!\n'));
+    commands.push(Buffer.from(new Date().toLocaleDateString('pt-BR') + '\n'));
 
-    // Documento fiscal se existir
-    if (sale.fiscal_document) {
-      commands.push(Buffer.from('--------------------------------\n'));
-      commands.push(Buffer.from(`${sale.fiscal_document.type} ${sale.fiscal_document.number}\n`));
-      if (sale.fiscal_document.access_key) {
-        commands.push(Buffer.from(sale.fiscal_document.access_key + '\n'));
-      }
-    }
-
-    // Cut paper
-    commands.push(Buffer.from([0x1D, 0x56, 0x00])); // GS V 0 - Full cut
+    // FORÇAR PARADA DE AVANÇO DE PAPEL
+    commands.push(Buffer.from([0x1B, 0x4A, 0x00])); // ESC J 0 - Sem avanço de linha
+    commands.push(Buffer.from([0x1B, 0x64, 0x00])); // ESC d 0 - Sem avanço de linha
+    
+    // Limpar buffer e resetar
+    commands.push(Buffer.from([0x1B, 0x40])); // ESC @ - Reset da impressora
+    
+    // Corte parcial (em vez de corte total)
+    commands.push(Buffer.from([0x1D, 0x56, 0x01])); // GS V 1 - Partial cut (usa menos papel)
 
     return commands;
   }
@@ -335,44 +439,73 @@ class ThermalPrinter {
     return methods[method] || method;
   }
 
-  // 🖨️ Método principal de impressão
+  // 🖨️ Método principal de impressão (Ultra-Compacto para Gainscha GA-E200)
   async printReceipt(saleData) {
     try {
-      // Tentar métodos em ordem de preferência
+      // PRIMEIRO: Reset forçado para limpar configurações
+      console.log('Resetando impressora para evitar papel longo...');
+      await this.resetPrinter();
+      
+      // Pequena pausa para o reset completar
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Tentar métodos em ordem de preferência para Gainscha GA-E200
       const methods = [
         { name: 'web', fn: () => this.printWithWebAPI(saleData) },
+        { name: 'usb', fn: () => this.printViaUSB(saleData) },
         { name: 'bluetooth', fn: () => this.printWithESCPOS(saleData) },
         { name: 'escpos', fn: () => this.printWithESCPOS(saleData) }
       ];
 
       for (const method of methods) {
         try {
+          console.log(`Tentando impressão via ${method.name} para Gainscha GA-E200...`);
           const result = await method.fn();
           if (result.success) {
-            return { ...result, method: method.name };
+            return { 
+              success: true, 
+              message: result.message,
+              method: method.name,
+              printer: this.printerModel
+            };
           }
         } catch (error) {
-          console.log(`Método ${method.name} falhou:`, error.message);
+          console.log(`Método ${method.name} falhou para Gainscha GA-E200:`, error.message);
           continue;
         }
       }
 
-      throw new Error('Nenhum método de impressão disponível');
+      throw new Error('Nenhum método de impressão disponível para Gainscha GA-E200');
     } catch (error) {
       return { success: false, error: error.message };
     }
   }
 
-  // ⚙️ Configurar impressora
+  // ⚙️ Configurar impressora Gainscha GA-E200
   async configurePrinter(config) {
-    this.paperWidth = config.paperWidth || 80;
-    this.printerType = config.type || 'web';
+    this.paperWidth = config.paperWidth || 58; // 58mm padrão compacto
+    this.printerModel = config.model || 'gainscha-ga-e200';
     
-    if (config.type === 'bluetooth' && !this.isConnected) {
+    if (config.type === 'gainscha-usb' && !this.isConnected) {
+      return await this.connectGainschaPrinter();
+    } else if (config.type === 'gainscha-bluetooth' && !this.isConnected) {
       return await this.connectBluetoothPrinter();
     }
     
-    return { success: true, message: 'Impressora configurada!' };
+    return { 
+      success: true, 
+      message: `Impressora ${this.printerModel} configurada (${this.paperWidth}mm)!` 
+    };
+  }
+
+  // 📋 Obter informações da impressora
+  getPrinterInfo() {
+    return {
+      model: this.printerModel,
+      type: this.printerType,
+      connected: this.isConnected,
+      paperWidth: this.paperWidth
+    };
   }
 }
 

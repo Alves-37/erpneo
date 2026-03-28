@@ -552,22 +552,34 @@ async function loadInitial() {
         return
       }
       try {
-        const pairs = await Promise.all(
-          ids.map(async (id) => {
-            try {
-              const imgs = await listProductImages(id)
-              const first = imgs?.[0]?.url || null
-              return [id, first]
-            } catch {
-              return [id, null]
-            }
-          })
-        )
+        // Carregar imagens em lotes para evitar sobrecarga e muitos erros de CORS simultâneos
+        const batchSize = 5;
+        const results = [];
+        
+        for (let i = 0; i < ids.length; i += batchSize) {
+          const batch = ids.slice(i, i + batchSize);
+          const batchResults = await Promise.all(
+            batch.map(async (id) => {
+              try {
+                const imgs = await listProductImages(id)
+                const first = imgs?.[0]?.url || null
+                return [id, first]
+              } catch (err) {
+                // Log silencioso para evitar poluição do console com erros de CORS/rede
+                console.debug(`Erro ao carregar imagem para produto ${id}:`, err.message);
+                return [id, null]
+              }
+            })
+          )
+          results.push(...batchResults);
+        }
+
         if (cancelled) return
         const next = {}
-        for (const [id, url] of pairs) next[id] = url
+        for (const [id, url] of results) next[id] = url
         setImageByProductId(next)
-      } catch {
+      } catch (err) {
+        console.error("Erro crítico ao carregar imagens no PDV:", err);
         if (!cancelled) setImageByProductId({})
       }
     }

@@ -74,7 +74,7 @@ export default function SettingsPage() {
   // Estados da impressora
   const [printerConfig, setPrinterConfig] = useState({
     type: 'web', // web, bluetooth, escpos
-    paperWidth: 80, // 58mm, 80mm
+    paperWidth: 58, // 58mm (compacto), 80mm (padrão)
     autoPrint: false, // imprimir automaticamente após venda
     copies: 1,
     companyInfo: {
@@ -395,6 +395,19 @@ export default function SettingsPage() {
   async function savePrinterConfig() {
     localStorage.setItem('printerConfig', JSON.stringify(printerConfig))
     toast.success('Configurações da impressora salvas!')
+  }
+
+  async function resetPrinterConfig() {
+    try {
+      const result = await thermalPrinter.resetPrinter()
+      if (result.success) {
+        toast.success('Impressora resetada com sucesso!')
+      } else {
+        toast.error(`Falha no reset: ${result.error}`)
+      }
+    } catch (error) {
+      toast.error(`Erro no reset: ${error.message}`)
+    }
   }
 
   async function testPrinter() {
@@ -964,7 +977,7 @@ export default function SettingsPage() {
               onChange={(e) => setPrinterConfig(prev => ({ ...prev, paperWidth: Number(e.target.value) }))}
               className="w-full rounded-lg border border-slate-600 bg-slate-800 text-white px-3 py-2"
             >
-              <option value={58}>58mm</option>
+              <option value={58}>58mm (Compacto - Restaurante)</option>
               <option value={80}>80mm (Padrão)</option>
             </select>
           </div>
@@ -998,7 +1011,7 @@ export default function SettingsPage() {
 
           
           {/* Botões de Ação */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <button
               onClick={savePrinterConfig}
               className="rounded-xl border border-brand-600 bg-brand-600 hover:bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white"
@@ -1012,6 +1025,14 @@ export default function SettingsPage() {
               className="rounded-xl border border-slate-600 bg-slate-700 hover:bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
             >
               {testingPrinter ? 'Testando...' : 'Imprimir Teste'}
+            </button>
+            
+            <button
+              onClick={resetPrinterConfig}
+              className="rounded-xl border border-amber-600 bg-amber-600 hover:bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white"
+              title="Resetar impressora para resolver problemas de papel longo"
+            >
+              🔄 Reset Impressora
             </button>
             
             {printerConfig.type === 'bluetooth' && (
@@ -1032,6 +1053,8 @@ export default function SettingsPage() {
               <li>• <strong>Impressão Web:</strong> Funciona com impressoras USB/Rede conectadas ao computador</li>
               <li>• <strong>Bluetooth:</strong> Requer navegador compatível com Web Bluetooth API (Chrome/Edge)</li>
               <li>• <strong>ESC/POS:</strong> Padrão da indústria para impressoras térmicas</li>
+              <li>• <strong>58mm:</strong> Formato compacto para restaurantes (economiza papel)</li>
+              <li>• <strong>Reset:</strong> Use se a impressora estiver saindo papel muito longo</li>
               <li>• <strong>Teste:</strong> Sempre teste antes de usar em produção</li>
             </ul>
           </div>

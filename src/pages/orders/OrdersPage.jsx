@@ -128,8 +128,9 @@ export default function OrdersPage() {
     const existingItems = (o.items || []).map(item => ({
       product_id: item.product_id,
       qty: item.qty,
-      price_at_order: item.price_at_order,
-      line_total: item.line_total,
+      price_at_order: Number(item.price_at_order || 0),
+      cost_at_order: Number(item.cost_at_order || 0),
+      line_total: Number(item.qty || 0) * Number(item.price_at_order || 0),
       id: item.id // Manter ID do item original
     }))
     setAddOrderItems(existingItems)
@@ -139,7 +140,6 @@ export default function OrdersPage() {
   const productById = useMemo(() => {
     const map = new Map()
     for (const p of products || []) map.set(p.id, p)
-    console.log('productById map criado:', map.size, 'produtos')
     return map
   }, [products])
 
@@ -164,10 +164,8 @@ export default function OrdersPage() {
         offset: 0,
         is_active: true  // Apenas produtos ativos
       })
-      console.log('Produtos carregados:', data?.length || 0, data)
       setProducts(data || [])
-    } catch (error) {
-      console.error('Erro ao carregar produtos:', error)
+    } catch {
       setProducts([])
     } finally {
       setLoading(false)
@@ -199,26 +197,43 @@ export default function OrdersPage() {
     let cancelled = false
 
     async function loadImages() {
+      if (!products?.length) return;
+      
       try {
-        const entries = await Promise.all(
-          (products || []).map(async (p) => {
-            try {
-              const imgs = await listProductImages(p.id)
-              const first = imgs?.[0]?.url || imgs?.[0]?.file_path || null
-              return [p.id, first]
-            } catch {
-              return [p.id, null]
-            }
-          })
-        )
-
-        const map = {}
-        for (const [id, filePath] of entries) {
-          map[id] = filePath
+        // Carregar imagens em lotes para evitar sobrecarga e muitos erros simultâneos
+        const batchSize = 5;
+        const results = [];
+        
+        for (let i = 0; i < products.length; i += batchSize) {
+          const batch = products.slice(i, i + batchSize);
+          const batchResults = await Promise.all(
+            batch.map(async (p) => {
+              try {
+                // Tenta carregar as imagens do produto
+                const imgs = await listProductImages(p.id);
+                const first = imgs?.[0]?.url || imgs?.[0]?.file_path || null;
+                return [p.id, first];
+              } catch (err) {
+                // Log silencioso do erro de CORS ou rede
+                console.debug(`Erro ao carregar imagem para produto ${p.id}:`, err.message);
+                return [p.id, null];
+              }
+            })
+          );
+          results.push(...batchResults);
         }
-        if (!cancelled) setImageByProductId(map)
-      } catch {
-        if (!cancelled) setImageByProductId({})
+
+        const map = {};
+        for (const [id, filePath] of results) {
+          map[id] = filePath;
+        }
+        
+        if (!cancelled) {
+          setImageByProductId(map);
+        }
+      } catch (err) {
+        console.error("Erro crítico ao carregar imagens:", err);
+        if (!cancelled) setImageByProductId({});
       }
     }
 
@@ -355,13 +370,19 @@ export default function OrdersPage() {
 
     if (existingIndex >= 0) {
       const updated = [...addOrderItems]
-      updated[existingIndex] = { ...updated[existingIndex], qty: updated[existingIndex].qty + 1 }
+      const newQty = (updated[existingIndex].qty || 0) + 1
+      updated[existingIndex] = { 
+        ...updated[existingIndex], 
+        qty: newQty,
+        line_total: newQty * (updated[existingIndex].price_at_order || 0)
+      }
       setAddOrderItems(updated)
     } else {
       const newItem = {
         product_id: product.id,
         qty: 1,
         price_at_order: product.price,
+        cost_at_order: product.cost || 0,
         line_total: product.price
       }
       setAddOrderItems([...addOrderItems, newItem])
@@ -376,7 +397,12 @@ export default function OrdersPage() {
     }
 
     const updated = [...addOrderItems]
-    updated[index] = { ...updated[index], qty: newQty, line_total: newQty * updated[index].price_at_order }
+    const price = Number(updated[index].price_at_order || 0)
+    updated[index] = { 
+      ...updated[index], 
+      qty: newQty, 
+      line_total: Number((newQty * price).toFixed(2)) 
+    }
     setAddOrderItems(updated)
   }
 
@@ -439,33 +465,41 @@ export default function OrdersPage() {
   }
 
   async function doUpdateOrder() {
-    if (!targetOrder || addOrderItems.length === 0) {
-      toast.error('Adicione pelo menos um produto ao pedido.')
-      return
-    }
-
+    if (!targetOrder) return;
+    
+    // Permitir lista vazia de itens se o usuário removeu todos (o backend deve tratar)
     setAddItemsLoading(true)
     try {
+      // Log para depuração
+      console.log('Atualizando pedido:', targetOrder.id);
+      
+      // Mapear itens para o formato que o backend espera
+      // IMPORTANTE: Garantir que os campos correspondam ao esperado pelo model OrderUpdate
       const payload = {
+        table_number: targetOrder.table_number,
+        seat_number: targetOrder.seat_number,
         items: addOrderItems.map(item => ({
-          product_id: item.product_id,
-          qty: item.qty,
-          price_at_order: item.price_at_order,
-          cost_at_order: item.cost_at_order
+          product_id: Number(item.product_id),
+          qty: Number(item.qty),
+          price_at_order: Number(item.price_at_order || 0),
+          cost_at_order: Number(item.cost_at_order || 0)
         }))
-      }
+      };
+
+      console.log('Payload enviado para updateOrder:', payload);
 
       await updateOrder(targetOrder.id, payload)
       toast.success('Pedido atualizado com sucesso!')
       
-      // Resetar formulário
+      // Resetar formulário e recarregar dados
       setOpenAddItems(false)
       setTargetOrder(null)
       setAddOrderItems([])
       
-      // Recarregar lista
+      // IMPORTANTE: Recarregar a lista de pedidos
       await load()
     } catch (err) {
+      console.error('Erro ao atualizar pedido:', err);
       toast.error(err?.response?.data?.detail || 'Não foi possível atualizar o pedido.')
     } finally {
       setAddItemsLoading(false)
