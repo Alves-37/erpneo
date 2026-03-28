@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { getMe } from '../api/auth.js'
@@ -282,6 +282,25 @@ function _filterBranchesByVisibility(visibleBranchIds, branches) {
 export default function DashboardLayout() {
   const [logoutOpen, setLogoutOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [autoCloseSidebar, setAutoCloseSidebar] = useState(() => {
+    try {
+      return window.localStorage.getItem('neoerp_sidebar_auto_close') === '1'
+    } catch {
+      return false
+    }
+  })
+
+  useEffect(() => {
+    const handleConfigChange = () => {
+      try {
+        setAutoCloseSidebar(window.localStorage.getItem('neoerp_sidebar_auto_close') === '1')
+      } catch {
+        // ignore
+      }
+    }
+    window.addEventListener('sidebarConfigChanged', handleConfigChange)
+    return () => window.removeEventListener('sidebarConfigChanged', handleConfigChange)
+  }, [])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return window.localStorage.getItem('neoerp_sidebar_collapsed') === '1'
@@ -439,6 +458,16 @@ export default function DashboardLayout() {
     // me já é carregado junto com as filiais no effect acima
   }, [])
 
+  const isMobile = useMemo(() => {
+    return typeof window !== 'undefined' && window.innerWidth < 1024
+  }, [contextVersion]) // Re-adicionado contextVersion para reagir a mudanças de estado global que afetam layout
+
+  function onNavClick() {
+    if (autoCloseSidebar || isMobile) {
+      setSidebarOpen(false)
+    }
+  }
+
   return (
     <div className="h-screen overflow-hidden bg-slate-950 text-slate-100">
       <div className="flex h-screen overflow-hidden relative">
@@ -515,7 +544,7 @@ export default function DashboardLayout() {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  onClick={() => setSidebarOpen(false)}
+                  onClick={onNavClick}
                   title={sidebarCollapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     `${sidebarCollapsed ? 'px-0 py-3 w-12 justify-center' : 'px-4 py-3'} rounded-xl text-base font-semibold transition-all duration-150 flex items-center ${

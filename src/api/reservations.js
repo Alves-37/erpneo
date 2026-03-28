@@ -5,6 +5,7 @@ export async function listReservations(params = {}) {
     date,
     status,
     table_id,
+    establishment_id,
     limit = 100,
     offset = 0
   } = params
@@ -13,10 +14,11 @@ export async function listReservations(params = {}) {
   if (date) queryParams.append('date', date)
   if (status) queryParams.append('status', status)
   if (table_id) queryParams.append('table_id', table_id)
+  if (establishment_id) queryParams.append('establishment_id', establishment_id)
   queryParams.append('limit', limit.toString())
   queryParams.append('offset', offset.toString())
 
-  const response = await apiClient.get(`/reservations/?${queryParams.toString()}`)
+  const response = await apiClient.get(`/reservations?${queryParams.toString()}`)
   return response.data
 }
 
@@ -26,7 +28,7 @@ export async function getReservation(reservationId) {
 }
 
 export async function createReservation(reservationData) {
-  const response = await apiClient.post('/reservations/', reservationData)
+  const response = await apiClient.post('/reservations', reservationData)
   return response.data
 }
 

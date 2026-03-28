@@ -102,13 +102,45 @@ export default function ReservationsPage() {
   async function loadReservations() {
     setLoading(true)
     try {
-      const data = await listReservations({ date: selectedDate, limit: 200 })
-      setReservations(data.reservations || [])
-    } catch {
-      setReservations([])
-      toast.error('Não foi possível carregar reservas.')
+      // 1. Tenta carregar reservas filtradas pelo estabelecimento atual (se existir)
+      const params = { 
+        limit: 1000 
+      };
+      if (me?.establishment_id) {
+        params.establishment_id = me.establishment_id;
+      }
+      
+      const data = await listReservations(params);
+      
+      let allRows = [];
+      if (Array.isArray(data)) {
+        allRows = data;
+      } else if (data && Array.isArray(data.reservations)) {
+        allRows = data.reservations;
+      } else if (data && typeof data === 'object') {
+        const possibleArray = Object.values(data).find(val => Array.isArray(val));
+        if (possibleArray) allRows = possibleArray;
+      }
+
+      // 2. Filtrar localmente por data e estabelecimento para garantir visibilidade
+      let filteredRows = allRows;
+      
+      if (selectedDate) {
+        filteredRows = allRows.filter(r => {
+          if (!r.reservation_date) return false;
+          const rDateStr = String(r.reservation_date);
+          const datePart = rDateStr.includes('T') ? rDateStr.split('T')[0] : rDateStr.split(' ')[0];
+          return datePart === selectedDate;
+        });
+      }
+      
+      setReservations(filteredRows);
+    } catch (err) {
+      console.error('Erro ao carregar reservas:', err);
+      setReservations([]);
+      toast.error('Não foi possível carregar reservas.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -182,7 +214,8 @@ export default function ReservationsPage() {
         estimated_amount: formData.estimated_amount ? Number(formData.estimated_amount) : null,
         deposit_percentage: formData.deposit_percentage ? Number(formData.deposit_percentage) : null,
         deposit_amount: formData.deposit_amount ? Number(formData.deposit_amount) : null,
-        reservation_date: new Date(formData.reservation_date).toISOString()
+        reservation_date: new Date(formData.reservation_date).toISOString(),
+        establishment_id: Number(me?.establishment_id) // Garantir que salva no ponto de venda atual
       }
 
       if (activeReservation?.id) {
@@ -197,6 +230,8 @@ export default function ReservationsPage() {
       
       resetForm()
       setActiveReservation(null)
+      
+      // Forçar atualização imediata
       await loadReservations()
     } catch (err) {
       const msg = err?.response?.data?.detail || 'Não foi possível salvar a reserva.'
@@ -324,7 +359,7 @@ export default function ReservationsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-100">
-                      Mesa {reservation.table_id}
+                      Mesa {tables.find(t => t.id === reservation.table_id)?.number || reservation.table_id}
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-sm text-slate-100">

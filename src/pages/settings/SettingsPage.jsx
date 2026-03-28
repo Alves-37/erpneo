@@ -71,12 +71,13 @@ export default function SettingsPage() {
   const [openSecurity, setOpenSecurity] = useState(false)
   const [openPrinter, setOpenPrinter] = useState(false)
 
-  // Estados da impressora
+  // Estados da impressora e sistema
   const [printerConfig, setPrinterConfig] = useState({
     type: 'web', // web, bluetooth, escpos
     paperWidth: 58, // 58mm (compacto), 80mm (padrão)
     autoPrint: false, // imprimir automaticamente após venda
     copies: 1,
+    sidebarAutoClose: false,
     companyInfo: {
       name: '',
       address: '',
@@ -136,10 +137,14 @@ export default function SettingsPage() {
         setProfileEmail(meRes?.email || '')
         setProfileUsername(meRes?.username || '')
 
-        // Carregar configurações da impressora
+        // Carregar configurações da impressora e sidebar
         const savedPrinterConfig = localStorage.getItem('printerConfig')
         if (savedPrinterConfig) {
-          setPrinterConfig(JSON.parse(savedPrinterConfig))
+          const parsed = JSON.parse(savedPrinterConfig)
+          setPrinterConfig({
+            ...parsed,
+            sidebarAutoClose: localStorage.getItem('neoerp_sidebar_auto_close') === '1'
+          })
         } else {
           // Usar dados da empresa como padrão
           setPrinterConfig(prev => ({
@@ -149,7 +154,8 @@ export default function SettingsPage() {
               address: c?.address || '',
               phone: c?.phone || '',
               document: c?.nuit ? `NUIT: ${c.nuit}` : ''
-            }
+            },
+            sidebarAutoClose: localStorage.getItem('neoerp_sidebar_auto_close') === '1'
           }))
         }
       } catch {
@@ -391,10 +397,20 @@ export default function SettingsPage() {
     }
   }
 
-  // Funções da impressora
+  // Funções da impressora e sistema
   async function savePrinterConfig() {
-    localStorage.setItem('printerConfig', JSON.stringify(printerConfig))
-    toast.success('Configurações da impressora salvas!')
+    try {
+      localStorage.setItem('printerConfig', JSON.stringify(printerConfig))
+      localStorage.setItem('neoerp_sidebar_auto_close', printerConfig.sidebarAutoClose ? '1' : '0')
+      toast.success('Configurações salvas!')
+      
+      // Emitir evento customizado para notificar outras partes do app
+      window.dispatchEvent(new Event('sidebarConfigChanged'))
+      
+      bumpContext() // Forçar atualização do layout
+    } catch (error) {
+      toast.error('Erro ao salvar configurações')
+    }
   }
 
   async function resetPrinterConfig() {
@@ -1006,6 +1022,24 @@ export default function SettingsPage() {
                 onChange={(e) => setPrinterConfig(prev => ({ ...prev, copies: Number(e.target.value) }))}
                 className="w-full rounded-lg border border-slate-600 bg-slate-800 text-white px-3 py-2"
               />
+            </div>
+
+            <div className="pt-4 border-t border-slate-700">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={printerConfig.sidebarAutoClose}
+                    onChange={(e) => setPrinterConfig(prev => ({ ...prev, sidebarAutoClose: e.target.checked }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">Fechar menu automaticamente</span>
+                  <span className="text-xs text-slate-400">Fecha o menu lateral ao selecionar uma página (ideal para telas pequenas)</span>
+                </div>
+              </label>
             </div>
           </div>
 
