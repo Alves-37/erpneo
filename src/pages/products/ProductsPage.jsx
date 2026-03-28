@@ -1206,23 +1206,7 @@ export default function ProductsPage() {
             </div>
           ) : null}
 
-          {isRestaurant ? (
-            <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-3">
-              <div className="text-xs font-semibold text-amber-200 mb-2">🍔 Guia Rápido - Restaurante</div>
-              <div className="grid grid-cols-1 gap-2 text-xs text-amber-100">
-                <div>
-                  <span className="font-semibold">🥩 MATÉRIA-PRIMA (Ingredientes):</span> Controla estoque, preço de compra, usado em receitas
-                </div>
-                <div>
-                  <span className="font-semibold">🍔 PRODUTO FINAL (Vendidos):</span> Controla estoque, preço de venda, tem receita e opções
-                </div>
-                <div>
-                  <span className="font-semibold">📋 DICA:</span> Crie primeiro os ingredientes (carne, queijo, pão) depois os produtos (hambúrguer)
-                </div>
-              </div>
-            </div>
-          ) : null}
-
+          
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="grid gap-2">
               <div className="text-sm font-medium text-slate-200">Nome</div>

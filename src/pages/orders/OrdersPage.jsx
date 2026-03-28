@@ -4,6 +4,7 @@ import { closeOrder, createOrder, deleteOrder, listOrders, updateOrder } from '.
 import { listCustomers } from '../../api/customers.js'
 import { getMyBranch } from '../../api/branches.js'
 import { listCompanies } from '../../api/companies.js'
+import { listProducts, listProductImages } from '../../api/products.js'
 import { thermalPrinter } from '../../utils/thermalPrinter.js'
 import ProductOptionSelector from '../../components/ProductOptionSelector.jsx'
 import { toast } from '../../services/toast.js'
@@ -79,6 +80,12 @@ export default function OrdersPage() {
   const [newSeatNumber, setNewSeatNumber] = useState('')
   const [newOrderItems, setNewOrderItems] = useState([])
 
+  // Estados para adicionar itens a pedido existente
+  const [openAddItems, setOpenAddItems] = useState(false)
+  const [addItemsLoading, setAddItemsLoading] = useState(false)
+  const [targetOrder, setTargetOrder] = useState(null)
+  const [addOrderItems, setAddOrderItems] = useState([])
+
   // Estado para seleção de opções
   const [optionsProduct, setOptionsProduct] = useState(null)
 
@@ -115,9 +122,24 @@ export default function OrdersPage() {
     setOpenDetails(true)
   }
 
+  function openAddItemsModal(o) {
+    setTargetOrder(o)
+    // Copiar itens existentes para edição
+    const existingItems = (o.items || []).map(item => ({
+      product_id: item.product_id,
+      qty: item.qty,
+      price_at_order: item.price_at_order,
+      line_total: item.line_total,
+      id: item.id // Manter ID do item original
+    }))
+    setAddOrderItems(existingItems)
+    setOpenAddItems(true)
+  }
+
   const productById = useMemo(() => {
     const map = new Map()
     for (const p of products || []) map.set(p.id, p)
+    console.log('productById map criado:', map.size, 'produtos')
     return map
   }, [products])
 
@@ -140,10 +162,12 @@ export default function OrdersPage() {
       const data = await listProducts({ 
         limit: 500, 
         offset: 0,
-        show_in_menu: isRestaurant ? true : undefined  // Apenas para restaurantes
+        is_active: true  // Apenas produtos ativos
       })
+      console.log('Produtos carregados:', data?.length || 0, data)
       setProducts(data || [])
-    } catch {
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error)
       setProducts([])
     } finally {
       setLoading(false)
@@ -301,12 +325,64 @@ export default function OrdersPage() {
     } else {
       setNewOrderItems(prev => [...prev, newItem])
     }
-
-    setOptionsProduct(null)
   }
 
-  function removeNewOrderItem(index) {
-    setNewOrderItems(prev => prev.filter((_, i) => i !== index))
+  function addProductToNewOrder(product) {
+    if (!newTableNumber || !newSeatNumber) {
+      toast.error('Preencha número da mesa e cliente.')
+      return
+    }
+
+    const existingIndex = newOrderItems.findIndex(item => item.product_id === product.id)
+
+    if (existingIndex >= 0) {
+      const updated = [...newOrderItems]
+      updated[existingIndex] = { ...updated[existingIndex], qty: updated[existingIndex].qty + 1 }
+      setNewOrderItems(updated)
+    } else {
+      const newItem = {
+        product_id: product.id,
+        qty: 1,
+        price_at_order: product.price,
+        line_total: product.price
+      }
+      setNewOrderItems([...newOrderItems, newItem])
+    }
+  }
+
+  function addProductToExistingOrder(product) {
+    const existingIndex = addOrderItems.findIndex(item => item.product_id === product.id)
+
+    if (existingIndex >= 0) {
+      const updated = [...addOrderItems]
+      updated[existingIndex] = { ...updated[existingIndex], qty: updated[existingIndex].qty + 1 }
+      setAddOrderItems(updated)
+    } else {
+      const newItem = {
+        product_id: product.id,
+        qty: 1,
+        price_at_order: product.price,
+        line_total: product.price
+      }
+      setAddOrderItems([...addOrderItems, newItem])
+    }
+  }
+
+  function updateExistingOrderItemQty(index, newQty) {
+    if (newQty <= 0) {
+      const updated = addOrderItems.filter((_, i) => i !== index)
+      setAddOrderItems(updated)
+      return
+    }
+
+    const updated = [...addOrderItems]
+    updated[index] = { ...updated[index], qty: newQty, line_total: newQty * updated[index].price_at_order }
+    setAddOrderItems(updated)
+  }
+
+  function removeExistingOrderItem(index) {
+    const updated = addOrderItems.filter((_, i) => i !== index)
+    setAddOrderItems(updated)
   }
 
   function updateNewItemQuantity(index, newQty) {
@@ -322,7 +398,7 @@ export default function OrdersPage() {
 
   async function doCreateOrder() {
     if (!newTableNumber || !newSeatNumber) {
-      toast.error('Informe a mesa e o cliente/assento.')
+      toast.error('Preencha número da mesa e cliente.')
       return
     }
 
@@ -359,6 +435,40 @@ export default function OrdersPage() {
       toast.error(err?.response?.data?.detail || 'Não foi possível criar o pedido.')
     } finally {
       setCreateOrderLoading(false)
+    }
+  }
+
+  async function doUpdateOrder() {
+    if (!targetOrder || addOrderItems.length === 0) {
+      toast.error('Adicione pelo menos um produto ao pedido.')
+      return
+    }
+
+    setAddItemsLoading(true)
+    try {
+      const payload = {
+        items: addOrderItems.map(item => ({
+          product_id: item.product_id,
+          qty: item.qty,
+          price_at_order: item.price_at_order,
+          cost_at_order: item.cost_at_order
+        }))
+      }
+
+      await updateOrder(targetOrder.id, payload)
+      toast.success('Pedido atualizado com sucesso!')
+      
+      // Resetar formulário
+      setOpenAddItems(false)
+      setTargetOrder(null)
+      setAddOrderItems([])
+      
+      // Recarregar lista
+      await load()
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Não foi possível atualizar o pedido.')
+    } finally {
+      setAddItemsLoading(false)
     }
   }
 
@@ -662,6 +772,19 @@ export default function OrdersPage() {
                   }}
                 >
                   Finalizar
+                </button>
+              ) : null}
+
+              {detailsOrder.status === 'open' || detailsOrder.status === 'in_progress' ? (
+                <button
+                  type="button"
+                  className="rounded-xl border border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50 px-3 py-2 text-xs font-semibold text-emerald-200"
+                  onClick={() => {
+                    setOpenDetails(false)
+                    openAddItemsModal(detailsOrder)
+                  }}
+                >
+                  Adicionar Itens
                 </button>
               ) : null}
 
@@ -992,6 +1115,162 @@ export default function OrdersPage() {
               className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
               {createOrderLoading ? 'Criando...' : 'Criar Pedido'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Adicionar Itens ao Pedido Existente */}
+      <Modal
+        open={openAddItems}
+        title={
+          targetOrder
+            ? `Adicionar Itens · Mesa ${targetOrder.table_number} · Cliente ${targetOrder.seat_number}`
+            : 'Adicionar Itens'
+        }
+        onClose={() => setOpenAddItems(false)}
+      >
+        <div className="grid gap-4">
+          <div className="text-sm text-slate-200">
+            Adicione mais produtos ao pedido existente. Os itens atuais também podem ser removidos ou ter suas quantidades alteradas.
+          </div>
+
+          {/* Lista de produtos para adicionar */}
+          <div className="grid gap-2">
+            <div className="text-xs font-semibold text-slate-400">Adicionar Produtos</div>
+            
+            {/* Dropdown para selecionar produtos */}
+            <select
+              onChange={(e) => {
+                if (e.target.value) {
+                  const product = products.find(p => p.id === parseInt(e.target.value))
+                  if (product) {
+                    addProductToExistingOrder(product)
+                  }
+                  e.target.value = '' // Resetar select
+                }
+              }}
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              disabled={addItemsLoading || !products.length}
+            >
+              <option value="">Selecione um produto...</option>
+              {products
+                .filter(p => p.is_active)  // Apenas produtos ativos
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                .map(product => (
+                  <option key={product.id} value={product.id}>
+                    {product.name} - {Number(product.price || 0).toFixed(2)} MT
+                  </option>
+                ))
+              }
+            </select>
+
+            {/* Grid de produtos em cards (opcional, para acesso rápido) */}
+            {products.length > 0 && (
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                {products
+                  .filter(p => p.is_active)  // Apenas produtos ativos
+                  .slice(0, 10) // Limitar a 10 produtos para não sobrecarregar
+                  .map(product => (
+                    <button
+                      key={product.id}
+                      onClick={() => addProductToExistingOrder(product)}
+                      className="rounded-lg border border-slate-700 bg-slate-900 p-2 text-left hover:border-brand-600 transition-colors disabled:opacity-60"
+                      disabled={addItemsLoading}
+                      title={`${product.name} - ${Number(product.price || 0).toFixed(2)} MT`}
+                    >
+                      <div className="text-sm font-medium text-slate-100 truncate">{product.name}</div>
+                      <div className="text-xs text-slate-400">{Number(product.price || 0).toFixed(2)} MT</div>
+                    </button>
+                  ))}
+              </div>
+            )}
+
+            {!products.length && (
+              <div className="text-xs text-slate-400 text-center py-4">
+                Nenhum produto encontrado. Verifique se há produtos ativos e visíveis no cardápio.
+              </div>
+            )}
+          </div>
+
+          {/* Itens do pedido */}
+          {addOrderItems.length > 0 && (
+            <div className="grid gap-2">
+              <div className="text-xs font-semibold text-slate-400">Itens do Pedido</div>
+              {addOrderItems.map((item, index) => {
+                const p = productById.get(item.product_id)
+                return (
+                  <div key={index} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-slate-100" title={p?.name || ''}>
+                          {p?.name || `Produto ${item.product_id}`}
+                        </div>
+                        <div className="text-xs text-slate-400">{Number(item.price_at_order || 0).toFixed(2)} MT</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900">
+                        <button
+                          onClick={() => updateExistingOrderItemQty(index, Math.max(1, (item.qty || 1) - 1))}
+                          className="h-5 w-5 rounded border border-slate-700 bg-slate-800 text-xs text-slate-300 hover:bg-slate-700"
+                          disabled={addItemsLoading}
+                        >
+                          -
+                        </button>
+                        <span className="min-w-[2rem] text-center text-xs font-semibold text-white">
+                          {item.qty || 1}
+                        </span>
+                        <button
+                          onClick={() => updateExistingOrderItemQty(index, (item.qty || 1) + 1)}
+                          className="h-5 w-5 rounded border border-slate-700 bg-slate-800 text-xs text-slate-300 hover:bg-slate-700"
+                          disabled={addItemsLoading}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => removeExistingOrderItem(index)}
+                        className="h-5 w-5 rounded border border-rose-700 bg-rose-950 text-xs text-rose-300 hover:bg-rose-900"
+                        disabled={addItemsLoading}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Total */}
+          <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+            <div className="text-sm font-semibold text-slate-200">Total do Pedido:</div>
+            <div className="text-sm font-bold text-white">
+              {Number(addOrderItems.reduce((acc, item) => acc + (item.line_total || 0), 0)).toFixed(2)} MT
+            </div>
+          </div>
+
+          {/* Botões de ação */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpenAddItems(false)
+                setTargetOrder(null)
+                setAddOrderItems([])
+              }}
+              className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={addItemsLoading || addOrderItems.length === 0}
+              onClick={doUpdateOrder}
+              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {addItemsLoading ? 'Atualizando...' : 'Atualizar Pedido'}
             </button>
           </div>
         </div>
