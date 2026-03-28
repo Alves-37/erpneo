@@ -426,6 +426,146 @@ class ThermalPrinter {
     return commands;
   }
 
+  // 🍳 Gerar comandos ESC/POS para Ticket de Cozinha (Ultra-Compacto)
+  generateKitchenTicketCommands(orderData) {
+    const { order, items, company } = orderData;
+    let commands = [];
+
+    // Inicialização
+    commands.push(Buffer.from([0x1B, 0x40])); // ESC @ - Initialize printer
+    commands.push(Buffer.from([0x1B, 0x74, 0x02])); // PC860 (Português)
+    commands.push(Buffer.from([0x1B, 0x21, 0x01])); // Small font
+    
+    // Centralizar
+    commands.push(Buffer.from([0x1B, 0x61, 0x01])); // Center align
+    
+    // Título COZINHA (Negrito e Grande se possível)
+    commands.push(Buffer.from([0x1B, 0x45, 0x01])); // Bold on
+    commands.push(Buffer.from('*** PEDIDO COZINHA ***\n'));
+    
+    // Mesa e Assento
+    commands.push(Buffer.from(`MESA: ${order.table_number} | CLIENTE: ${order.seat_number}\n`));
+    commands.push(Buffer.from([0x1B, 0x45, 0x00])); // Bold off
+    
+    // Hora do pedido
+    commands.push(Buffer.from(`${new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}\n`));
+    
+    commands.push(Buffer.from('------------------\n'));
+    
+    // Alinhar à esquerda
+    commands.push(Buffer.from([0x1B, 0x61, 0x00])); // Left align
+    
+    // Itens (Sem preços, apenas quantidades e nomes)
+    items.forEach(item => {
+      const itemName = item.name || item.product_name || `Item #${item.product_id}`;
+      // Em ticket de cozinha, a quantidade deve ser bem visível
+      commands.push(Buffer.from([0x1B, 0x45, 0x01])); // Bold on
+      commands.push(Buffer.from(`${item.quantity || item.qty}x `));
+      commands.push(Buffer.from([0x1B, 0x45, 0x00])); // Bold off
+      commands.push(Buffer.from(`${itemName}\n`));
+      
+      if (item.notes) {
+        commands.push(Buffer.from(`  OBS: ${item.notes}\n`));
+      }
+    });
+    
+    commands.push(Buffer.from('------------------\n'));
+    
+    // Rodapé
+    commands.push(Buffer.from([0x1B, 0x61, 0x01])); // Center align
+    commands.push(Buffer.from('Bom trabalho!\n'));
+    
+    // Reset e Corte
+    commands.push(Buffer.from([0x1B, 0x40])); // Reset
+    commands.push(Buffer.from([0x1D, 0x56, 0x01])); // Partial cut
+    
+    return commands;
+  }
+
+  // 🍳 Gerar HTML para Ticket de Cozinha
+  generateKitchenTicketHTML(orderData) {
+    const { order, items } = orderData;
+    
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        @media print {
+          @page { size: 58mm 297mm; margin: 2mm; }
+          body { font-family: 'Courier New', monospace; font-size: 10px; width: 54mm; line-height: 1.2; }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .border { border-top: 1px dashed #000; margin: 4px 0; }
+          .item { font-size: 12px; margin: 4px 0; }
+          .kitchen-title { font-size: 14px; font-weight: bold; border: 2px solid #000; padding: 2px; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="center">
+        <div class="kitchen-title">COZINHA</div>
+        <div class="bold" style="font-size: 16px; margin: 5px 0;">
+          MESA: ${order.table_number}<br>
+          CLIENTE: ${order.seat_number}
+        </div>
+        <div>${new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</div>
+      </div>
+      
+      <div class="border"></div>
+      
+      ${items.map(item => `
+        <div class="item">
+          <span class="bold">${item.quantity || item.qty}x</span> 
+          ${item.name || item.product_name || `Item #${item.product_id}`}
+          ${item.notes ? `<br><small>OBS: ${item.notes}</small>` : ''}
+        </div>
+      `).join('')}
+      
+      <div class="border"></div>
+      
+      <div class="center bold">BOM TRABALHO!</div>
+      
+      <script>
+        window.onload = function() {
+          setTimeout(() => { window.print(); window.close(); }, 300);
+        };
+      </script>
+    </body>
+    </html>
+    `;
+  }
+
+  // 🍳 Imprimir Ticket de Cozinha
+  async printKitchenTicket(orderData) {
+    try {
+      await this.resetPrinter();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Tentar Web API primeiro (HTML)
+      if (this.printerType === 'web' || !this.isConnected) {
+        const html = this.generateKitchenTicketHTML(orderData);
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(html);
+        printWindow.document.close();
+        return { success: true, message: 'Ticket de cozinha enviado!' };
+      }
+      
+      // Caso contrário, ESC/POS
+      const commands = this.generateKitchenTicketCommands(orderData);
+      if (this.printerType === 'bluetooth' && this.characteristic) {
+        for (const command of commands) { await this.characteristic.writeValue(command); }
+      } else if (this.printerType === 'usb' && this.device) {
+        for (const command of commands) { await this.device.transferOut(1, command); }
+      }
+      
+      return { success: true, message: 'Ticket de cozinha impresso!' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
   // 📝 Obter texto do método de pagamento
   getPaymentMethodText(method) {
     const methods = {

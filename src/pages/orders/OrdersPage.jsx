@@ -261,6 +261,7 @@ export default function OrdersPage() {
 
   function requestDeleteOrder(o) {
     if (!o) return
+    // Permitir excluir pedidos fechados ou cancelados
     if (o.status !== 'closed' && o.status !== 'cancelled') {
       toast.error('Só é possível excluir pedidos fechados ou cancelados.')
       return
@@ -446,8 +447,16 @@ export default function OrdersPage() {
         }))
       }
 
-      await createOrder(payload)
+      const createdOrder = await createOrder(payload)
       toast.success('Pedido criado com sucesso!')
+      
+      // Perguntar se deseja imprimir o ticket de cozinha
+      setTimeout(() => {
+        showPrintConfirm(() => printReceiptAfterOrder({
+          ...createdOrder,
+          status: 'open' // Garante que caia no fluxo de ticket de cozinha
+        }))
+      }, 500)
       
       // Resetar formulário
       setOpenCreateOrder(false)
@@ -490,6 +499,15 @@ export default function OrdersPage() {
 
       await updateOrder(targetOrder.id, payload)
       toast.success('Pedido atualizado com sucesso!')
+      
+      // Perguntar se deseja imprimir o ticket de cozinha (atualizado)
+      setTimeout(() => {
+        showPrintConfirm(() => printReceiptAfterOrder({
+          ...targetOrder,
+          items: addOrderItems, // Itens atualizados
+          status: 'in_progress' // Garante fluxo de ticket de cozinha
+        }))
+      }, 500)
       
       // Resetar formulário e recarregar dados
       setOpenAddItems(false)
@@ -550,15 +568,42 @@ export default function OrdersPage() {
   // Função para imprimir recibo após finalizar pedido
   async function printReceiptAfterOrder(order) {
     try {
-      // Preparar dados do pedido para impressão
+      // Se o pedido ainda está aberto ou em progresso, imprime ticket de cozinha
+      if (order.status === 'open' || order.status === 'in_progress') {
+        const orderData = {
+          order: {
+            table_number: order.table_number,
+            seat_number: order.seat_number,
+          },
+          items: order.items?.map(item => ({
+            product_id: item.product_id,
+            product_name: item.product_name,
+            qty: item.qty,
+            notes: item.notes || ''
+          })) || [],
+          company: {
+            name: companies?.[0]?.name || 'ERPCRM'
+          }
+        };
+
+        const result = await thermalPrinter.printKitchenTicket(orderData);
+        if (result.success) {
+          toast.success('Ticket de cozinha enviado!');
+        } else {
+          toast.error(`Falha ao imprimir ticket de cozinha: ${result.error}`);
+        }
+        return;
+      }
+
+      // Caso contrário (pedido fechado), imprime o recibo do cliente
       const saleData = {
         sale: {
-          id: `PED-${order.id}`,
-          created_at: order.created_at || new Date().toISOString(),
+          id: `REC-PED-${order.id}`,
+          created_at: new Date().toISOString(),
           subtotal: order.items?.reduce((sum, item) => sum + (item.qty * Number(item.price_at_order || 0)), 0) || 0,
           discount: 0,
-          total: orderTotal,
-          payment_method: paymentMethod
+          total: order.total || order.items?.reduce((sum, item) => sum + (item.qty * Number(item.price_at_order || 0)), 0) || 0,
+          payment_method: order.payment_method || 'Dinheiro'
         },
         items: order.items?.map(item => ({
           name: item.product_name || `Produto #${item.product_id}`,
@@ -574,26 +619,25 @@ export default function OrdersPage() {
         },
         customer: order.customer_name ? { name: order.customer_name } : null,
         payment: {
-          method: paymentMethod,
-          amount_paid: paymentMethod === 'cash' ? effectivePaid : orderTotal,
-          change: paymentMethod === 'cash' ? (effectivePaid - orderTotal) : 0
+          method: order.payment_method || 'cash',
+          amount_paid: order.paid || 0,
+          change: order.change || 0
         }
       }
 
-      const result = await thermalPrinter.printReceipt(saleData)
-      
+      const result = await thermalPrinter.printReceipt(saleData);
       if (result.success) {
-        toast.success('Recibo impresso com sucesso!')
+        toast.success('Recibo do cliente impresso!');
       } else {
-        toast.error(`Falha na impressão: ${result.error}`)
+        toast.error(`Falha na impressão: ${result.error}`);
       }
     } catch (error) {
-      toast.error(`Erro ao imprimir: ${error.message}`)
+      toast.error(`Erro ao imprimir: ${error.message}`);
     }
   }
 
   return (
-    <div>
+    <div className="p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">Pedidos</h1>

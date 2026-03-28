@@ -203,45 +203,49 @@ export default function EstablishmentsPage() {
       {loading ? (
         <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-6 text-sm text-slate-300">Carregando...</div>
       ) : rows.length ? (
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((r) => (
-            <div key={r.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <div className="text-sm font-semibold text-white truncate" title={r.name || ''}>
-                      {r.name}
+            <div key={r.id} className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-white truncate" title={r.name || ''}>
+                        {r.name}
+                      </div>
+                      <div className="flex gap-1.5">
+                        {r.is_default ? (
+                          <span className="inline-flex rounded-full border border-brand-900/60 bg-brand-950/30 px-2 py-0.5 text-[10px] font-semibold text-brand-200 whitespace-nowrap">
+                            Principal
+                          </span>
+                        ) : null}
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap ${
+                            r.is_active
+                              ? 'border-emerald-900/60 bg-emerald-950/30 text-emerald-200'
+                              : 'border-rose-900/60 bg-rose-950/30 text-rose-200'
+                          }`}
+                        >
+                          {r.is_active ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </div>
                     </div>
-                    {r.is_default ? (
-                      <span className="inline-flex rounded-full border border-brand-900/60 bg-brand-950/30 px-2 py-0.5 text-[11px] font-semibold text-brand-200">
-                        Principal
-                      </span>
-                    ) : null}
-                    <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                        r.is_active
-                          ? 'border-emerald-900/60 bg-emerald-950/30 text-emerald-200'
-                          : 'border-rose-900/60 bg-rose-950/30 text-rose-200'
-                      }`}
-                    >
-                      {r.is_active ? 'Ativo' : 'Inativo'}
-                    </span>
+                    <div className="mt-1 text-xs text-slate-400">ID: {r.id}</div>
                   </div>
-                  <div className="mt-1 text-xs text-slate-400">ID: {r.id}</div>
                 </div>
 
-                <div className="shrink-0 flex flex-col gap-2">
+                <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
+                    className="flex items-center justify-center rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
                     disabled={!isAdmin || r.is_default}
                     onClick={() => makeDefault(r)}
                   >
-                    Tornar principal
+                    Principal
                   </button>
                   <button
                     type="button"
-                    className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
+                    className="flex items-center justify-center rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
                     disabled={!isAdmin}
                     onClick={() => openEdit(r)}
                   >
@@ -249,7 +253,7 @@ export default function EstablishmentsPage() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
+                    className="flex items-center justify-center rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 disabled:opacity-60"
                     disabled={!isAdmin}
                     onClick={() => toggleActive(r)}
                   >
@@ -257,7 +261,7 @@ export default function EstablishmentsPage() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-60"
+                    className="flex items-center justify-center rounded-xl border border-rose-900/60 bg-rose-950/30 hover:bg-rose-950/50 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-60"
                     disabled={!isAdmin || r.is_default}
                     onClick={() => requestDelete(r)}
                   >

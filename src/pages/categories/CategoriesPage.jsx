@@ -128,7 +128,7 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-56px-48px)] overflow-hidden flex flex-col">
+    <div className="h-full overflow-hidden flex flex-col p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <div className="text-lg sm:text-xl font-semibold">Categorias</div>
@@ -139,7 +139,7 @@ export default function CategoriesPage() {
           <button
             type="button"
             onClick={load}
-            className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100"
+            className="flex-1 sm:flex-none rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 font-semibold"
           >
             Atualizar
           </button>
@@ -151,7 +151,7 @@ export default function CategoriesPage() {
               setOpenModal(true)
             }}
             disabled={!isAdmin}
-            className="rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-60 px-4 py-2.5 text-sm text-white"
+            className="flex-1 sm:flex-none rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-60 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-900/20"
           >
             Nova categoria
           </button>
@@ -159,26 +159,33 @@ export default function CategoriesPage() {
       </div>
 
       <div className="mt-6 flex-1 overflow-auto rounded-2xl border border-slate-800 bg-slate-900">
-        <div className="p-4">
+        <div className="p-3 sm:p-4">
           {loading ? (
-            <div className="text-sm text-slate-300">Carregando...</div>
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent"></div>
+              <div className="text-sm text-slate-400">Carregando categorias...</div>
+            </div>
           ) : !items?.length ? (
-            <div className="text-sm text-slate-300">Sem categorias</div>
+            <div className="text-center py-12 text-sm text-slate-400">Sem categorias registadas</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {(items || []).map((c) => (
-                <div key={c.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <div className="flex items-center gap-2">
+                <div key={c.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4 hover:border-slate-700 transition-colors">
+                  <div className="flex items-center gap-3">
                     <div
-                      className="h-3.5 w-3.5 rounded-full border border-slate-700"
+                      className="h-4 w-4 rounded-full border border-slate-700 shrink-0 shadow-sm"
                       style={{ backgroundColor: c?.color || '#0f172a' }}
                       title={c?.color || ''}
                     />
-                    <div className="text-sm font-semibold text-white truncate" title={c.name}>
-                      {c.name}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-white truncate" title={c.name}>
+                        {c.name}
+                      </div>
+                      <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        {c.business_type}
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-1 text-xs text-slate-400">Tipo: {c.business_type}</div>
 
                   <div className="mt-4 flex items-center gap-2">
                     <button
@@ -190,7 +197,7 @@ export default function CategoriesPage() {
                         setColor(c?.color || '')
                         setOpenModal(true)
                       }}
-                      className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 px-3 py-2 text-xs text-slate-100"
+                      className="flex-1 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 px-3 py-2 text-xs font-bold text-slate-100 transition-all active:scale-95"
                     >
                       Editar
                     </button>
@@ -198,7 +205,7 @@ export default function CategoriesPage() {
                       type="button"
                       disabled={!isAdmin}
                       onClick={() => onDelete(c)}
-                      className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 px-3 py-2 text-xs text-slate-100"
+                      className="flex-1 rounded-xl border border-rose-900/30 bg-rose-950/10 hover:bg-rose-950/30 disabled:opacity-60 px-3 py-2 text-xs font-bold text-rose-200 transition-all active:scale-95"
                     >
                       Remover
                     </button>

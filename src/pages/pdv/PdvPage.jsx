@@ -954,9 +954,18 @@ async function loadInitial() {
         })
         toast.success('Pedido enviado com sucesso.')
         
-        // Perguntar se deseja imprimir o comprovante do pedido
+          // Perguntar se deseja imprimir o comprovante do pedido (Cozinha)
         setTimeout(() => {
-          showPrintConfirm('pedido', printReceiptAfterSale)
+          showPrintConfirm('pedido', () => printReceiptAfterSale({
+            table_number: tableNum,
+            seat_number: seatNum,
+            items: cartLines.map(l => ({
+              product_id: l.product.id,
+              product_name: l.product.name,
+              qty: l.qty,
+              notes: l.notes || ''
+            }))
+          }))
         }, 500)
 
         setTableNumber('')
@@ -1036,10 +1045,37 @@ async function loadInitial() {
     setOpenPrintConfirm(true)
   }
 
-  // Função para imprimir recibo após venda/pedido
-  async function printReceiptAfterSale() {
+  // Função para imprimir recibo após venda no PDV
+  async function printReceiptAfterSale(directData = null) {
     try {
-      // Preparar dados da venda para impressão
+      if (printConfirmType === 'pedido' || directData) {
+        // Preparar dados do pedido para ticket de cozinha
+        const orderData = {
+          order: {
+            table_number: directData?.table_number || tableNumber,
+            seat_number: directData?.seat_number || seatNumber,
+          },
+          items: directData?.items || cartLines.map(line => ({
+            product_id: line.product.id,
+            product_name: line.product.name,
+            qty: line.qty,
+            notes: line.notes || ''
+          })),
+          company: {
+            name: companies?.[0]?.name || 'ERPCRM'
+          }
+        };
+        
+        const result = await thermalPrinter.printKitchenTicket(orderData);
+        if (result.success) {
+          toast.success('Ticket de cozinha enviado!');
+        } else {
+          toast.error(`Falha ao imprimir ticket de cozinha: ${result.error}`);
+        }
+        return;
+      }
+
+      // Dados comuns para recibo de venda ou dívida
       const saleData = {
         sale: {
           id: 'REC-' + Date.now(),
@@ -1061,7 +1097,7 @@ async function loadInitial() {
           phone: companies?.[0]?.phone || '',
           document: companies?.[0]?.nuit ? `NUIT: ${companies[0].nuit}` : ''
         },
-        customer: selectedCustomerId ? { name: customers?.find(c => c.id === selectedCustomerId)?.name } : null,
+        customer: selectedCustomerId ? { name: customers?.find(c => String(c.id) === String(selectedCustomerId))?.name } : null,
         payment: {
           method: paymentMethod,
           amount_paid: paymentMethod === 'cash' ? effectivePaidNum : finalTotal,
@@ -1113,10 +1149,17 @@ async function loadInitial() {
                         setOpenCashOpen(true)
                       }
                     }}
-                    className={`rounded-xl border ${cashSession?.id ? 'border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50 text-emerald-200' : 'border-amber-900/60 bg-amber-950/30 hover:bg-amber-950/50 text-amber-200'} px-3 py-2.5 text-xs font-semibold disabled:opacity-60`}
+                    className={`flex flex-col items-center justify-center rounded-xl border ${cashSession?.id ? 'border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50 text-emerald-200' : 'border-amber-900/60 bg-amber-950/30 hover:bg-amber-950/50 text-amber-200'} px-3 py-2 text-white disabled:opacity-60`}
                     title={cashSession?.id ? 'Caixa aberto' : 'Caixa fechado'}
                   >
-                    {cashSession?.id ? 'Caixa aberto' : 'Abrir caixa'}
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 mb-0.5" aria-hidden="true">
+                      <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <line x1="12" y1="8" x2="12" y2="16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span className="text-[10px] font-bold leading-none uppercase tracking-tighter">
+                      {cashSession?.id ? 'Caixa' : 'Abrir'}
+                    </span>
                   </button>
                 ) : null}
 
@@ -1126,9 +1169,17 @@ async function loadInitial() {
                     setOpenQuotes(true)
                     await loadQuotes()
                   }}
-                  className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2.5 text-sm font-semibold text-white"
+                  className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-white"
+                  title="Cotações"
                 >
-                  Cotações
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 mb-0.5" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <polyline points="14 2 14 8 20 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <polyline points="10 9 9 9 8 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span className="text-[10px] font-bold leading-none uppercase tracking-tighter">Cotações</span>
                 </button>
 
                 {!isTableOrder ? (
@@ -1136,9 +1187,15 @@ async function loadInitial() {
                     type="button"
                     disabled={!cartLines.length || saving}
                     onClick={() => setOpenSaveQuote(true)}
-                    className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
+                    className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 px-3 py-2 text-white disabled:opacity-60"
+                    title="Salvar cotação"
                   >
-                    Salvar
+                    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 mb-0.5" aria-hidden="true">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <polyline points="17 21 17 13 7 13 7 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <polyline points="7 3 7 8 15 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span className="text-[10px] font-bold leading-none uppercase tracking-tighter">Salvar</span>
                   </button>
                 ) : null}
 
@@ -2581,18 +2638,20 @@ async function loadInitial() {
       {/* Modal de Confirmação de Impressão */}
       <Modal 
         open={openPrintConfirm} 
-        title="Confirmação de Impressão" 
+        title={printConfirmType === 'pedido' ? 'Imprimir para Cozinha?' : 'Confirmação de Impressão'} 
         onClose={() => setOpenPrintConfirm(false)}
       >
         <div className="space-y-4">
           <div className="text-sm text-slate-200">
-            {printConfirmType === 'venda' && 'Deseja imprimir o recibo da venda?'}
-            {printConfirmType === 'pedido' && 'Deseja imprimir o comprovante do pedido?'}
+            {printConfirmType === 'venda' && 'Deseja imprimir o recibo da venda para o cliente?'}
+            {printConfirmType === 'pedido' && 'Deseja imprimir o ticket de preparo para a COZINHA?'}
             {printConfirmType === 'divida' && 'Deseja imprimir o comprovante da dívida?'}
           </div>
           
           <div className="text-xs text-slate-400">
-            O recibo será impresso na impressora térmica configurada nas configurações do sistema.
+            {printConfirmType === 'pedido' 
+              ? 'O ticket conterá apenas os itens e a mesa para os cozinheiros.' 
+              : 'O recibo será impresso na impressora térmica configurada.'}
           </div>
           
           <div className="flex items-center justify-end gap-3 pt-2">
@@ -2607,13 +2666,14 @@ async function loadInitial() {
               type="button"
               onClick={() => {
                 if (printConfirmCallback) {
+                  // Passar os dados capturados se existirem
                   printConfirmCallback()
                 }
                 setOpenPrintConfirm(false)
               }}
               className="rounded-xl border border-brand-600 bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
             >
-              Sim, imprimir
+              Sim, imprimir {printConfirmType === 'pedido' ? 'Ticket Cozinha' : 'Recibo'}
             </button>
           </div>
         </div>

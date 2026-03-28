@@ -77,7 +77,7 @@ export default function ReturnsPage() {
   async function loadSales() {
     setLoading(true)
     try {
-      const rows = await listSales({ limit: 100, offset: 0 })
+      const rows = await listSales({ limit: 100, offset: 0, status: 'paid' }) // Ocultar anuladas na página de devolução por padrão
       setSales(Array.isArray(rows) ? rows : [])
     } catch {
       setSales([])

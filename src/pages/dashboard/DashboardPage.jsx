@@ -112,7 +112,7 @@ export default function DashboardPage() {
       const [s, ss, salesData, exp] = await Promise.all([
         getDashboardSummary({ establishment_id: estId }),
         getDashboardSalesSeries({ days: 30, establishment_id: estId }),
-        listSales({ limit: 100, offset: 0, establishment_id: estId }),
+        listSales({ limit: 100, offset: 0, establishment_id: estId, status: 'paid' }), // Garantir que apenas vendas pagas venham para o dashboard
         expPromise,
       ])
       setSummary(s)
@@ -166,6 +166,10 @@ export default function DashboardPage() {
     return { d, w, h, max }
   }, [series])
 
+  const activeSales = useMemo(() => {
+    return (sales || []).filter(s => String(s.status).toLowerCase() !== 'void')
+  }, [sales])
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -215,8 +219,8 @@ export default function DashboardPage() {
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 sm:p-4">
           <div className="text-xs font-semibold text-slate-400">Total de vendas listadas</div>
-          <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : Number(sales?.length || 0)}</div>
-          <div className="mt-2 text-xs text-slate-400">Últimas {Math.min(100, Number(sales?.length || 0))}</div>
+          <div className="mt-2 text-2xl sm:text-3xl font-semibold text-white">{loading ? '-' : Number(activeSales?.length || 0)}</div>
+          <div className="mt-2 text-xs text-slate-400">Últimas {Math.min(100, Number(activeSales?.length || 0))} (ativas)</div>
         </div>
 
         {!isCashier && (

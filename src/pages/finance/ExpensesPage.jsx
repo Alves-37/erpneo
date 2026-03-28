@@ -304,24 +304,24 @@ export default function ExpensesPage() {
   })
 
   return (
-    <div>
-      <div className="flex items-start justify-between gap-4">
+    <div className="h-full overflow-hidden flex flex-col p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <div className="text-xl font-semibold">Despesas</div>
+          <div className="text-lg sm:text-xl font-semibold">Despesas</div>
           <div className="mt-1 text-sm text-slate-300">Contas a pagar e saídas de caixa</div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full sm:w-auto">
           <button
             type="button"
             onClick={openCreateCategory}
-            className="rounded-xl px-4 py-2 text-sm font-semibold border border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-800"
+            className="flex-1 sm:flex-none rounded-xl px-4 py-2.5 text-sm font-semibold border border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-800 transition-all active:scale-95"
           >
             + Categoria
           </button>
           <button
             type="button"
             onClick={openCreateExpense}
-            className="rounded-xl px-4 py-2 text-sm font-semibold bg-brand-600 text-white hover:bg-brand-700"
+            className="flex-1 sm:flex-none rounded-xl px-4 py-2.5 text-sm font-semibold bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-900/20 transition-all active:scale-95"
           >
             + Despesa
           </button>
@@ -329,80 +329,160 @@ export default function ExpensesPage() {
       </div>
 
       <div className="mt-5">
-        <input
-          type="text"
-          placeholder="Pesquisar descrição, categoria ou status..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="w-full max-w-md rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-600"
-        />
+        <div className="relative w-full max-w-md">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
+              <path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            placeholder="Pesquisar despesas..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="w-full rounded-xl border border-slate-800 bg-slate-950 pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-600 transition-all"
+          />
+        </div>
       </div>
 
-      {loading ? (
-        <div className="mt-6 text-center text-slate-400">Carregando...</div>
-      ) : (
-        <div className="mt-6 overflow-x-auto rounded-xl border border-slate-800">
-          <table className="w-full text-sm">
-            <thead className="border-b border-slate-800 bg-slate-950">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Descrição</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Categoria</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Valor</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Vencimento</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-slate-300">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
+      <div className="mt-6 flex-1 overflow-auto rounded-2xl border border-slate-800 bg-slate-900">
+        {/* Mobile: Card view */}
+        <div className="md:hidden">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-600 border-t-transparent"></div>
+              <div className="text-sm text-slate-400">Carregando despesas...</div>
+            </div>
+          ) : filtered.length ? (
+            <div className="divide-y divide-slate-800">
               {filtered.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-950">
-                  <td className="px-4 py-3 text-white">{r.description}</td>
-                  <td className="px-4 py-3 text-slate-300">{r.category_name || '-'}</td>
-                  <td className="px-4 py-3 text-white">{money(r.amount)} MZN</td>
-                  <td className="px-4 py-3 text-slate-300">{r.due_date}</td>
-                  <td className="px-4 py-3">{statusBadge(r.status)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      {r.status === 'pending' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => openEditExpense(r)}
-                            className="text-xs rounded px-2 py-1 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => requestPay(r)}
-                            className="text-xs rounded px-2 py-1 bg-green-800 text-green-200 hover:bg-green-700"
-                          >
-                            Pagar
-                          </button>
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => requestDelete(r)}
-                        className="text-xs rounded px-2 py-1 bg-red-800 text-red-200 hover:bg-red-700"
-                      >
-                        Remover
-                      </button>
+                <div key={r.id} className="p-4 bg-slate-950/20 active:bg-slate-900 transition-colors">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-white leading-tight mb-1 truncate">
+                        {r.description}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          {r.category_name || 'Sem categoria'}
+                        </span>
+                        <span className="text-slate-700">•</span>
+                        <span className="text-[10px] text-slate-400">
+                          Venc: {r.due_date}
+                        </span>
+                      </div>
                     </div>
-                  </td>
-                </tr>
+                    <div className="shrink-0 text-right">
+                      <div className="text-sm font-black text-white tabular-nums">
+                        {money(r.amount)}
+                      </div>
+                      <div className="mt-1">{statusBadge(r.status)}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    {r.status === 'pending' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openEditExpense(r)}
+                          className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-100 transition-all active:scale-95"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => requestPay(r)}
+                          className="flex-1 rounded-xl border border-emerald-900/30 bg-emerald-950/10 px-3 py-2 text-xs font-bold text-emerald-200 transition-all active:scale-95"
+                        >
+                          Pagar
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => requestDelete(r)}
+                      className="flex-1 rounded-xl border border-rose-900/30 bg-rose-950/10 px-3 py-2 text-xs font-bold text-rose-200 transition-all active:scale-95"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                </div>
               ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                    Nenhuma despesa encontrada.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            <div className="px-4 py-12 text-center text-sm text-slate-500">Nenhuma despesa encontrada.</div>
+          )}
         </div>
-      )}
+
+        {/* Desktop: Table view */}
+        <div className="hidden md:block">
+          {loading ? (
+            <div className="text-center py-12 text-slate-400 font-medium">Carregando despesas...</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="border-b border-slate-800 bg-slate-950/50 sticky top-0 backdrop-blur-sm">
+                <tr>
+                  <th className="px-4 py-3 text-left font-bold text-slate-400 uppercase tracking-wider text-[10px]">Descrição</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-400 uppercase tracking-wider text-[10px]">Categoria</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-400 uppercase tracking-wider text-[10px]">Valor</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-400 uppercase tracking-wider text-[10px]">Vencimento</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-400 uppercase tracking-wider text-[10px]">Status</th>
+                  <th className="px-4 py-3 text-right font-bold text-slate-400 uppercase tracking-wider text-[10px]">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {filtered.map((r) => (
+                  <tr key={r.id} className="hover:bg-slate-950/40 transition-colors group">
+                    <td className="px-4 py-3 text-white font-medium">{r.description}</td>
+                    <td className="px-4 py-3 text-slate-400">{r.category_name || '-'}</td>
+                    <td className="px-4 py-3 text-white font-bold tabular-nums">{money(r.amount)} MZN</td>
+                    <td className="px-4 py-3 text-slate-400">{r.due_date}</td>
+                    <td className="px-4 py-3">{statusBadge(r.status)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                        {r.status === 'pending' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditExpense(r)}
+                              className="text-[11px] font-bold rounded-lg px-2.5 py-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-all"
+                            >
+                              EDITAR
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => requestPay(r)}
+                              className="text-[11px] font-bold rounded-lg px-2.5 py-1.5 bg-emerald-900/40 text-emerald-200 hover:bg-emerald-900/60 transition-all"
+                            >
+                              PAGAR
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => requestDelete(r)}
+                          className="text-[11px] font-bold rounded-lg px-2.5 py-1.5 bg-rose-900/40 text-rose-200 hover:bg-rose-900/60 transition-all"
+                        >
+                          REMOVER
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-slate-500 font-medium italic">
+                      Nenhuma despesa encontrada para esta pesquisa.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
 
       {/* Expense Form Modal */}
       <Modal open={openExpenseForm} title={editingExpense ? 'Editar Despesa' : 'Nova Despesa'} onClose={() => setOpenExpenseForm(false)}>

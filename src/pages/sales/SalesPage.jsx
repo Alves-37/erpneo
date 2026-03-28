@@ -149,7 +149,7 @@ export default function SalesPage() {
           limit: 100,
           offset: 0,
           establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
-          status: filterStatus || undefined,
+          status: filterStatus || 'paid', // Por padrão, mostrar apenas pagas (não anuladas)
           payment_method: filterPayment || undefined,
           sale_channel: filterChannel || undefined,
           date_from: filterDateFrom ? new Date(filterDateFrom).toISOString() : undefined,
@@ -445,7 +445,8 @@ export default function SalesPage() {
               }}
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
             >
-              <option value="">Todos</option>
+              <option value="paid">Pagas (Ativas)</option>
+              <option value="">Todas (incluindo anuladas)</option>
               <option value="completed">Concluída</option>
               <option value="pending">Pendente</option>
               <option value="void">Anulada</option>
