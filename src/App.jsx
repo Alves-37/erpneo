@@ -15,6 +15,7 @@ import SalesPage from './pages/sales/SalesPage.jsx'
 import PdvPage from './pages/pdv/PdvPage.jsx'
 import DebtsPage from './pages/debts/DebtsPage.jsx'
 import ReturnsPage from './pages/returns/ReturnsPage.jsx'
+import ReservationsPage from './pages/reservations/ReservationsPage.jsx'
 import TablesPage from './pages/tables/TablesPage.jsx'
 import OrdersPage from './pages/orders/OrdersPage.jsx'
 import DeliveryZonesPage from './pages/deliveryZones/DeliveryZonesPage.jsx'
@@ -107,6 +108,14 @@ function App() {
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/debts" element={<DebtsPage />} />
           <Route path="/returns" element={<ReturnsPage />} />
+          <Route
+            path="/reservations"
+            element={
+              <RestaurantOnlyRoute>
+                <ReservationsPage />
+              </RestaurantOnlyRoute>
+            }
+          />
           <Route path="/pdv" element={<PdvPage />} />
           <Route
             path="/tables"

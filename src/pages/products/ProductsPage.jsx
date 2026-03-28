@@ -233,7 +233,9 @@ export default function ProductsPage() {
   async function loadCategories() {
     try {
       const rows = await listProductCategories()
-      setCategories(rows || [])
+      // Garantir que categories seja sempre um array
+      const categoriesArray = Array.isArray(rows) ? rows : []
+      setCategories(categoriesArray)
     } catch {
       setCategories([])
     }
@@ -270,12 +272,14 @@ export default function ProductsPage() {
 
   const categoriesById = useMemo(() => {
     const map = new Map()
-    for (const c of categories || []) map.set(c.id, c)
+    const categoriesArray = Array.isArray(categories) ? categories : []
+    for (const c of categoriesArray) map.set(c.id, c)
     return map
   }, [categories])
 
   const serviceCategoryId = useMemo(() => {
-    const row = (categories || []).find((c) => {
+    const categoriesArray = Array.isArray(categories) ? categories : []
+    const row = categoriesArray.find((c) => {
       const nm = String(c?.name || '').trim().toLowerCase()
       return nm === 'serviços' || nm === 'servicos'
     })
@@ -792,11 +796,11 @@ export default function ProductsPage() {
                   className="w-full sm:w-[240px] rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
                 >
                   <option value="">Todas categorias</option>
-                  {(categories || []).map((c) => (
+                  {Array.isArray(categories) ? categories.map((c) => (
                     <option key={c.id} value={String(c.id)}>
                       {c.name}
                     </option>
-                  ))}
+                  )) : []}
                 </select>
               </div>
             )}
@@ -1336,11 +1340,11 @@ export default function ProductsPage() {
                 className="w-full min-w-0 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
               >
                 <option value="">Sem categoria</option>
-                {(categories || []).map((c) => (
+                {Array.isArray(categories) ? categories.map((c) => (
                   <option key={c.id} value={String(c.id)}>
                     {c.name}
                   </option>
-                ))}
+                )) : []}
                 <option value="__new__">+ Nova categoria...</option>
               </select>
 

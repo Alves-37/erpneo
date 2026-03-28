@@ -1199,60 +1199,9 @@ async function loadInitial() {
 
             {isRestaurant ? (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="xl:hidden w-full">
-                    <div className="grid grid-cols-3 gap-2">
-                      <select
-                        value={saleChannel}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          if (v === 'table') {
-                            setSaleChannel('table')
-                            setTableNumber('')
-                            setSeatNumber('1')
-                            setOpenSeatModal(true)
-                            return
-                          }
-                          setSaleChannel('counter')
-                        }}
-                        className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                      >
-                        <option value="counter">Balcão</option>
-                        <option value="table">Mesa</option>
-                      </select>
-
-                      <select
-                        value={activeCategoryId}
-                        onChange={(e) => setActiveCategoryId(e.target.value)}
-                        className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
-                      >
-                        <option value="">Todas</option>
-                        {(categories || []).map((c) => (
-                          <option key={c.id} value={String(c.id)}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (saleChannel === 'table') {
-                            setOpenSeatModal(true)
-                          }
-                        }}
-                        className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 text-left"
-                      >
-                        {saleChannel === 'table'
-                          ? tableNumber
-                            ? `Mesa ${tableNumber} · C${seatNumber}`
-                            : 'Selecionar mesa'
-                          : `Troco: ${Number(change || 0).toFixed(2)}`}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="hidden xl:flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full">
+                  {/* Seleção de canal - visível em todas as telas */}
+                  <div className="flex flex-wrap items-center gap-2 w-full">
                     <button
                       type="button"
                       onClick={() => setSaleChannel('counter')}
@@ -1277,12 +1226,13 @@ async function loadInitial() {
                     </button>
                   </div>
 
+                  {/* Seleção de mesa e cliente - visível quando canal é mesa */}
                   {saleChannel === 'table' ? (
-                    <div className="hidden xl:flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 w-full">
                       <select
                         value={tableNumber}
                         onChange={(e) => setTableNumber(e.target.value)}
-                        className="w-48 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                        className="w-full sm:w-48 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
                       >
                         <option value="">Selecionar mesa</option>
                         {(tables || []).map((t) => {
@@ -1313,7 +1263,7 @@ async function loadInitial() {
                       </button>
 
                       {tableNumber ? (
-                        <div className={`text-xs ${selectedTableIsFull ? 'text-rose-300' : 'text-slate-400'}`}>
+                        <div className={`text-xs ${selectedTableIsFull ? 'text-rose-300' : 'text-slate-400'} w-full sm:w-auto`}>
                           {selectedTableCapacity ? (
                             <>
                               Ocupação: <span className="font-semibold">{selectedTableOccupiedCount}/{selectedTableCapacity}</span>{' '}
@@ -1361,11 +1311,11 @@ async function loadInitial() {
               </div>
             ) : null}
 
-            <div className="mt-3 hidden xl:flex items-center gap-2 overflow-x-auto pb-1">
+            <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
               <button
                 type="button"
                 onClick={() => setActiveCategoryId('')}
-                className={`shrink-0 rounded-xl border px-4 py-2.5 text-sm font-semibold ${
+                className={`shrink-0 rounded-xl border px-3 py-2.5 text-sm font-semibold ${
                   !activeCategoryId
                     ? 'border-brand-600 bg-brand-600 text-white'
                     : 'border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-800'
@@ -1378,7 +1328,7 @@ async function loadInitial() {
                   key={c.id}
                   type="button"
                   onClick={() => setActiveCategoryId(String(c.id))}
-                  className={`shrink-0 rounded-xl border px-4 py-2.5 text-sm font-semibold ${
+                  className={`shrink-0 rounded-xl border px-3 py-2.5 text-sm font-semibold ${
                     activeCategoryId === String(c.id)
                       ? 'border-brand-600 bg-brand-600 text-white'
                       : 'border-slate-800 bg-slate-950 text-slate-200 hover:bg-slate-800'
@@ -1599,7 +1549,7 @@ async function loadInitial() {
                             <option value="transfer">Transferência</option>
                             <option value="cheque">Cheque</option>
                             <option value="other">Outro</option>
-                            {!isRestaurant ? <option value="debt">Dívida (Fiado)</option> : null}
+                            <option value="debt">Dívida (Fiado)</option>
                           </select>
                         </label>
                         <label className="grid gap-2">
@@ -1858,6 +1808,7 @@ async function loadInitial() {
                     <option value="transfer">Transferência</option>
                     <option value="cheque">Cheque</option>
                     <option value="other">Outro</option>
+                    <option value="debt">Dívida (Fiado)</option>
                   </select>
                 </label>
                 <label className="grid gap-2">
@@ -1871,6 +1822,19 @@ async function loadInitial() {
                     placeholder="0.00"
                     type="text"
                   />
+                </label>
+              </div>
+              <div className="mt-3">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={includeTax}
+                    onChange={(e) => setIncludeTax(e.target.checked)}
+                    className="rounded border-slate-800 bg-slate-950 text-brand-600 focus:ring-brand-600 focus:ring-offset-0"
+                  />
+                  <div className="text-xs font-semibold text-slate-400">
+                    Incluir IVA ({includeTax ? 'Com IVA' : 'Sem IVA'})
+                  </div>
                 </label>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
@@ -1904,6 +1868,43 @@ async function loadInitial() {
             </div>
           )}
 
+          {paymentMethod === 'debt' ? (
+            <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950 p-3">
+              <label className="grid gap-2">
+                <div className="text-xs font-semibold text-slate-400">Cliente</div>
+                <select
+                  value={debtCustomerId}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setDebtCustomerId(v)
+                    if (!v) return
+                    const c = (customers || []).find((x) => String(x.id) === String(v))
+                    if (!c) return
+                    setDebtCustomerName(String(c.name || ''))
+                    setDebtCustomerNuit(String(c.nuit || ''))
+                  }}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                >
+                  <option value="">Selecionar cliente</option>
+                  {(customers || []).map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              
+              {debtCustomerId ? (
+                <div className="mt-2 text-xs text-slate-400">
+                  Cliente: <span className="font-semibold text-slate-200">{debtCustomerName}</span>
+                  {debtCustomerNuit ? (
+                    <> · NUIT: <span className="font-semibold text-slate-200">{debtCustomerNuit}</span></>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-3 text-sm">
             <div className="text-slate-300">Subtotal</div>
             <div className="text-right text-slate-100 font-semibold">{Number(total || 0).toFixed(2)} MZN</div>
@@ -1924,7 +1925,7 @@ async function loadInitial() {
             }}
             className="w-full rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {saving ? 'Processando...' : isTableOrder ? 'Processar pedido' : activeQuote?.id ? 'Converter cotação' : 'Finalizar venda'}
+            {saving ? 'Processando...' : isTableOrder ? 'Processar pedido' : activeQuote?.id ? 'Converter cotação' : paymentMethod === 'debt' ? 'Processar dívida' : 'Finalizar venda'}
           </button>
         </div>
       </Modal>

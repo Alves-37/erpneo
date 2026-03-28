@@ -306,17 +306,6 @@ export default function DebtsPage() {
     }
   }
 
-  if (isRestaurant) {
-    return (
-      <div className="h-[calc(100vh-56px-48px)] overflow-hidden flex flex-col">
-        <div>
-          <div className="text-lg sm:text-xl font-semibold">Dívidas</div>
-          <div className="mt-2 text-sm text-slate-300">Funcionalidade indisponível para restaurante.</div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="h-[calc(100vh-56px-48px)] overflow-hidden flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">

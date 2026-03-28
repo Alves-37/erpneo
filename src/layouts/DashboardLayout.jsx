@@ -18,8 +18,9 @@ const nav = [
   { to: '/stock/adjust', label: 'Ajuste de Stock' },
   { to: '/stock/history', label: 'Histórico de Stock' },
   { to: '/sales', label: 'Vendas' },
-  { to: '/debts', label: 'Dívidas', hideForRestaurant: true },
+  { to: '/debts', label: 'Dívidas' },
   { to: '/returns', label: 'Devoluções' },
+  { to: '/reservations', label: 'Reservas', restaurantOnly: true },
   { to: '/pdv', label: 'PDV' },
   { to: '/orders', label: 'Pedidos', restaurantOnly: true },
   { to: '/tables', label: 'Mesas', restaurantOnly: true },
@@ -145,6 +146,16 @@ function NavIcon({ name }) {
       </svg>
     )
   }
+  if (name === 'reservations') {
+    return (
+      <svg {...common}>
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    )
+  }
   if (name === 'pdv') {
     return (
       <svg {...common}>
@@ -249,6 +260,7 @@ function navIconKey(to) {
   if (to === '/sales') return 'sales'
   if (to === '/debts') return 'debts'
   if (to === '/returns') return 'returns'
+  if (to === '/reservations') return 'reservations'
   if (to === '/pdv') return 'pdv'
   if (to === '/orders') return 'orders'
   if (to === '/tables') return 'tables'
@@ -483,12 +495,15 @@ export default function DashboardLayout() {
               .filter((item) => !(isBar && item.to.startsWith('/stock')))
               .filter((item) => !item.adminOnly || canSwitchBranch)
               .filter((item) => {
+                // Si no es cajero, muestra todo
                 if (!isCashier) return true
+                // Si es cajero, muestra rutas esenciales + reservas y dívidas
                 return (
                   item.to === '/dashboard' ||
                   item.to === '/sales' ||
                   item.to === '/debts' ||
                   item.to === '/returns' ||
+                  item.to === '/reservations' ||
                   item.to === '/pdv' ||
                   item.to === '/orders' ||
                   item.to === '/tables' ||
