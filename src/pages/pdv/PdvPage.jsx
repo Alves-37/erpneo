@@ -56,6 +56,14 @@ function parseDecimal(value) {
 }
 
 export default function PdvPage() {
+  // 🔍 LOGGING AO CARREGAR PDV
+  useEffect(() => {
+    console.log('🛒 [PDV] PdvPage.jsx montado')
+    console.log('📍 [PDV] URL atual:', window.location.href)
+    console.log('🛤️ [PDV] Pathname:', window.location.pathname)
+    console.log('🔍 [PDV] Verificando itens do pedido no sessionStorage...')
+  }, [])
+
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
 
   const me = useAuthStore((s) => s.me)

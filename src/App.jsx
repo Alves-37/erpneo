@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import LoginPage from './pages/login/LoginPage.jsx'
@@ -73,6 +73,45 @@ function RestaurantOnlyRoute({ children }) {
 }
 
 function App() {
+  // 🔍 LOGGING GLOBAL DE ROTEAMENTO
+  useEffect(() => {
+    console.log('🌐 [APP] App.jsx montado')
+    console.log('📍 [APP] URL atual:', window.location.href)
+    console.log('🛤️ [APP] Pathname:', window.location.pathname)
+    
+    // Log quando a rota mudar
+    const handleRouteChange = () => {
+      console.log('🔄 [APP] Rota mudou para:', window.location.pathname)
+      console.log('🌐 [APP] URL completa:', window.location.href)
+    }
+    
+    // Observer para mudanças de URL
+    const originalPushState = window.history.pushState
+    const originalReplaceState = window.history.replaceState
+    
+    window.history.pushState = function(...args) {
+      console.log('🔀 [APP] pushState chamado com:', args)
+      const result = originalPushState.apply(this, args)
+      handleRouteChange()
+      return result
+    }
+    
+    window.history.replaceState = function(...args) {
+      console.log('🔀 [APP] replaceState chamado com:', args)
+      const result = originalReplaceState.apply(this, args)
+      handleRouteChange()
+      return result
+    }
+    
+    window.addEventListener('popstate', handleRouteChange)
+    
+    return () => {
+      window.history.pushState = originalPushState
+      window.history.replaceState = originalReplaceState
+      window.removeEventListener('popstate', handleRouteChange)
+    }
+  }, [])
+
   return (
     <>
       <ToastHost />

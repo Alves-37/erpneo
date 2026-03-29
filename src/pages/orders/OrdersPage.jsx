@@ -124,8 +124,10 @@ export default function OrdersPage() {
 
   function openAddItemsModal(o) {
     // 🛒 REDIRECIONAR PARA PDV em vez de abrir modal
-    console.log('🔄 Redirecionando para PDV com itens do pedido:', o.id)
-    console.log('📋 Itens atuais do pedido:', JSON.stringify(o.items, null, 2))
+    console.log('🔄 [ORDERS] Redirecionando para PDV com itens do pedido:', o.id)
+    console.log('📋 [ORDERS] Itens atuais do pedido:', JSON.stringify(o.items, null, 2))
+    console.log('🌐 [ORDERS] URL atual:', window.location.href)
+    console.log('🛤️ [ORDERS] Tentando redirecionar para:', '/pos')
     
     try {
       // Preparar itens para o carrinho do PDV
@@ -141,7 +143,7 @@ export default function OrdersPage() {
         order_seat_number: o.seat_number
       }))
       
-      console.log('🛒 Itens preparados para PDV:', JSON.stringify(orderItems, null, 2))
+      console.log('🛒 [ORDERS] Itens preparados para PDV:', JSON.stringify(orderItems, null, 2))
       
       // Salvar no sessionStorage para o PDV recuperar
       sessionStorage.setItem('pdv_order_items', JSON.stringify(orderItems))
@@ -152,14 +154,21 @@ export default function OrdersPage() {
         status: o.status
       }))
       
-      console.log('💾 Itens salvos no sessionStorage')
-      console.log('🚀 Redirecionando para /pos...')
+      console.log('💾 [ORDERS] Itens salvos no sessionStorage')
+      console.log('🚀 [ORDERS] Executando window.location.href = "/pos"')
+      
+      // Adicionar listener para detectar mudança de rota
+      const originalLog = console.log;
+      console.log('🔍 [ORDERS] Redirecionando em 3, 2, 1...')
       
       // Redirecionar para PDV
-      window.location.href = '/pos'
+      setTimeout(() => {
+        console.log('🚀 [ORDERS] REDIRECIONANDO AGORA PARA /pos')
+        window.location.href = '/pos'
+      }, 100)
       
     } catch (error) {
-      console.error('❌ Erro ao preparar redirecionamento para PDV:', error)
+      console.error('❌ [ORDERS] Erro ao preparar redirecionamento para PDV:', error)
       toast.error('Erro ao redirecionar para PDV: ' + error.message)
     }
     
