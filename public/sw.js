@@ -57,6 +57,24 @@ self.addEventListener('fetch', event => {
     return;
   }
   
+  // Ignorar requisições de API (não interceptar chamadas de backend)
+  if (url.pathname.startsWith('/api/') || 
+      url.pathname.startsWith('/dashboard/') ||
+      url.pathname.startsWith('/branches') ||
+      url.pathname.startsWith('/sales') ||
+      url.pathname.startsWith('/orders') ||
+      url.pathname.startsWith('/products') ||
+      url.pathname.startsWith('/customers') ||
+      url.pathname.startsWith('/reservations') ||
+      url.pathname.startsWith('/reports') ||
+      url.pathname.startsWith('/cash') ||
+      url.pathname.startsWith('/expenses') ||
+      url.pathname.startsWith('/fiscal') ||
+      url.hostname.includes('railway.app') ||
+      url.hostname.includes('api')) {
+    return;
+  }
+  
   // Estratégia: Cache First para arquivos estáticos
   if (request.destination === 'script' || 
       request.destination === 'style' || 
