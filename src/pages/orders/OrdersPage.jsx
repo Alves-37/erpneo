@@ -705,7 +705,26 @@ export default function OrdersPage() {
       toast.success('Comprovante enviado para a impressora!');
     } catch (error) {
       console.error('Erro na impressão QZ Tray:', error);
-      toast.error(`Falha na impressão: ${error.message}`);
+      
+      // Fallback para o método antigo se o QZ Tray estiver offline
+      if (error.message === 'OFFLINE') {
+        const orderData = {
+          order: {
+            table_number: order.table_number,
+            seat_number: order.seat_number,
+          },
+          items: order.items?.map(item => ({
+            product_id: item.product_id,
+            product_name: item.product_name,
+            qty: item.qty,
+            notes: item.notes || ''
+          })) || [],
+          company: { name: companies?.[0]?.name || 'ERPCRM' }
+        };
+        await thermalPrinter.printKitchenTicket(orderData);
+      } else {
+        toast.error(`Falha na impressão: ${error.message}`);
+      }
     }
   }
 

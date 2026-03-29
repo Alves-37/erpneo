@@ -8,14 +8,15 @@ qz.security.setSignaturePromise(() => Promise.resolve());
  * Conecta ao QZ Tray via WebSocket
  */
 export async function connectQZ() {
-  if (!qz.websocket.isActive()) {
-    try {
-      await qz.websocket.connect();
-      console.log("✅ QZ Tray conectado");
-    } catch (err) {
-      console.error("❌ Erro ao conectar ao QZ Tray:", err);
-      throw new Error("Não foi possível conectar ao QZ Tray. Certifique-se de que o serviço está rodando.");
-    }
+  if (qz.websocket.isActive()) return;
+  
+  try {
+    // Timeout curto para não travar a UI se o QZ estiver fechado
+    await qz.websocket.connect({ retries: 0, delay: 1 });
+    console.log("✅ QZ Tray conectado");
+  } catch (err) {
+    console.warn("⚠️ QZ Tray offline. Usando fallback...");
+    throw new Error("OFFLINE");
   }
 }
 
