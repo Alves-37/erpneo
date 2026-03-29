@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useNavigate } from 'react'
 
 import { closeOrder, createOrder, deleteOrder, listOrders, updateOrder } from '../../api/orders.js'
 import { listCustomers } from '../../api/customers.js'
@@ -47,6 +47,7 @@ function fmtStatus(st) {
 
 export default function OrdersPage() {
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
+  const navigate = useNavigate() // 🔍 Hook de navegação do React Router
 
   const [status, setStatus] = useState('open')
   const [loading, setLoading] = useState(true)
@@ -155,17 +156,21 @@ export default function OrdersPage() {
       }))
       
       console.log('💾 [ORDERS] Itens salvos no sessionStorage')
-      console.log('🚀 [ORDERS] Executando window.location.href = "/pos"')
       
-      // Adicionar listener para detectar mudança de rota
-      const originalLog = console.log;
-      console.log('🔍 [ORDERS] Redirecionando em 3, 2, 1...')
+      // 🚨 USANDO REACT ROUTER NAVIGATE
+      console.log('🚀 [ORDERS] Usando React Router navigate("/pos")')
       
-      // Redirecionar para PDV
+      // Usar React Router navigate em vez de window.location
+      navigate('/pos')
+      
+      // Verificação após um tempo
       setTimeout(() => {
-        console.log('🚀 [ORDERS] REDIRECIONANDO AGORA PARA /pos')
-        window.location.href = '/pos'
-      }, 100)
+        console.log('📍 [ORDERS] Verificação pós-navigate:', window.location.pathname)
+        if (window.location.pathname !== '/pos') {
+          console.log('⚠️ [ORDERS] React Router navigate falhou, tentando window.location')
+          window.location.href = '/pos'
+        }
+      }, 1000)
       
     } catch (error) {
       console.error('❌ [ORDERS] Erro ao preparar redirecionamento para PDV:', error)

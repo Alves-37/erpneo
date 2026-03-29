@@ -81,8 +81,31 @@ function App() {
     
     // Log quando a rota mudar
     const handleRouteChange = () => {
-      console.log('🔄 [APP] Rota mudou para:', window.location.pathname)
-      console.log('🌐 [APP] URL completa:', window.location.href)
+      const realPath = window.location.pathname
+      const realUrl = window.location.href
+      
+      console.log('🔄 [APP] Rota mudou para:', realPath)
+      console.log('🌐 [APP] URL completa:', realUrl)
+      
+      // 🚨 VERIFICAÇÃO REAL: Qual página realmente está visível?
+      setTimeout(() => {
+        const actualPath = window.location.pathname
+        const actualUrl = window.location.href
+        
+        console.log('🔍 [APP] VERIFICAÇÃO REAL após 500ms:')
+        console.log('📍 [APP] Pathname real:', actualPath)
+        console.log('🌐 [APP] URL real:', actualUrl)
+        
+        // Verificar se realmente mudou
+        if (actualPath === '/pos') {
+          console.log('✅ [APP] SUCESSO: Realmente está no PDV!')
+        } else if (actualPath === '/dashboard') {
+          console.log('❌ [APP] PROBLEMA: Ainda está no Dashboard!')
+          console.log('🚨 [APP] O redirecionamento para /pos falhou!')
+        } else {
+          console.log('❓ [APP] Inesperado: Está em:', actualPath)
+        }
+      }, 500)
     }
     
     // Observer para mudanças de URL
