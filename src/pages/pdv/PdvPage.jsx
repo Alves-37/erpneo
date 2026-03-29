@@ -13,6 +13,7 @@ import { createDebt } from '../../api/debts.js'
 import { convertQuoteToSale, createQuote, deleteQuote, listQuotes, updateQuote } from '../../api/quotes.js'
 import { closeCashSession, getCurrentCashSession, getCashSessionSummary, openCashSession } from '../../api/cashSessions.js'
 import { thermalPrinter } from '../../utils/thermalPrinter.js'
+import { printOrderReceipt } from '../../services/qzService.js'
 import { createCustomer, listCustomers } from '../../api/customers.js'
 import { downloadQuotePdf } from '../../api/quotes.js'
 import { toast } from '../../services/toast.js'
@@ -1069,18 +1070,36 @@ async function loadInitial() {
           toast.success('Pedido atualizado com sucesso!')
           
           // Perguntar se deseja imprimir o comprovante do pedido atualizado (Cozinha)
-          setTimeout(() => {
-            showPrintConfirm('pedido', () => printReceiptAfterSale({
-              table_number: tableNum,
-              seat_number: seatNum,
-              items: cartLines.map(l => ({
-                product_id: l.product.id,
-                product_name: l.product.name,
-                qty: l.qty,
-                notes: l.notes || ''
-              })),
-              order_id: existingOrderId // Incluir ID do pedido na impressão
-            }))
+          setTimeout(async () => {
+            try {
+              const orderData = {
+                id: existingOrderId,
+                table_number: tableNum,
+                seat_number: seatNum,
+                items: cartLines.map(l => ({
+                  product_id: l.product.id,
+                  product_name: l.product.name,
+                  qty: l.qty,
+                  price_at_order: Number(l.product.price || 0)
+                }))
+              };
+              await printOrderReceipt(orderData, branch);
+              toast.success('Comprovante enviado para a impressora.');
+            } catch (err) {
+              console.error('Erro na impressão direta:', err);
+              // Fallback para o comportamento original se a impressão direta falhar
+              showPrintConfirm('pedido', () => printReceiptAfterSale({
+                table_number: tableNum,
+                seat_number: seatNum,
+                items: cartLines.map(l => ({
+                  product_id: l.product.id,
+                  product_name: l.product.name,
+                  qty: l.qty,
+                  notes: l.notes || ''
+                })),
+                order_id: existingOrderId
+              }))
+            }
           }, 500)
           
           // 🔄 Limpar carrinho após atualizar pedido
@@ -1101,17 +1120,33 @@ async function loadInitial() {
           toast.success('Pedido criado com sucesso.')
           
           // Perguntar se deseja imprimir o comprovante do pedido (Cozinha)
-          setTimeout(() => {
-            showPrintConfirm('pedido', () => printReceiptAfterSale({
-              table_number: tableNum,
-              seat_number: seatNum,
-              items: cartLines.map(l => ({
-                product_id: l.product.id,
-                product_name: l.product.name,
-                qty: l.qty,
-                notes: l.notes || ''
+          setTimeout(async () => {
+            try {
+              const orderData = {
+                table_number: tableNum,
+                seat_number: seatNum,
+                items: cartLines.map(l => ({
+                  product_id: l.product.id,
+                  product_name: l.product.name,
+                  qty: l.qty,
+                  price_at_order: Number(l.product.price || 0)
+                }))
+              };
+              await printOrderReceipt(orderData, branch);
+              toast.success('Comprovante enviado para a impressora.');
+            } catch (err) {
+              console.error('Erro na impressão direta:', err);
+              showPrintConfirm('pedido', () => printReceiptAfterSale({
+                table_number: tableNum,
+                seat_number: seatNum,
+                items: cartLines.map(l => ({
+                  product_id: l.product.id,
+                  product_name: l.product.name,
+                  qty: l.qty,
+                  notes: l.notes || ''
+                }))
               }))
-            }))
+            }
           }, 500)
         }
 

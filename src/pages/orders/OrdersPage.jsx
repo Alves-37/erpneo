@@ -6,6 +6,7 @@ import { getMyBranch } from '../../api/branches.js'
 import { listCompanies } from '../../api/companies.js'
 import { listProducts, listProductImages } from '../../api/products.js'
 import { thermalPrinter } from '../../utils/thermalPrinter.js'
+import { printOrderReceipt } from '../../services/qzService.js'
 import ProductOptionSelector from '../../components/ProductOptionSelector.jsx'
 import { toast } from '../../services/toast.js'
 
@@ -171,6 +172,28 @@ export default function OrdersPage() {
       toast.error('Não foi possível carregar pedidos agora.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function printDirect(order) {
+    try {
+      const branch = await getMyBranch();
+      await printOrderReceipt(order, branch);
+      toast.success('Comprovante enviado para a impressora.');
+    } catch (err) {
+      console.error('Erro na impressão direta:', err);
+      // Fallback para o componente antigo se necessário
+      await thermalPrinter.printKitchenTicket({
+        id: order.id,
+        table_number: order.table_number,
+        seat_number: order.seat_number,
+        items: order.items?.map(it => ({
+          product_name: it.product_name || `Produto #${it.product_id}`,
+          qty: it.qty,
+          notes: it.notes || ''
+        })) || [],
+        company: { name: companies?.[0]?.name || 'ERPCRM' }
+      });
     }
   }
 
@@ -595,43 +618,74 @@ export default function OrdersPage() {
     setOptionsProduct(null)
   }
 
-  async function doClose() {
+  async function handleCloseOrder() {
     if (!closingOrder) return
 
-    if (paymentMethod === 'cash' && effectivePaid < orderTotal) {
-      toast.error('Valor recebido insuficiente.')
-      return
+    const effectivePaid = Number(String(paid || '0').replace(',', '.'))
+    if (!Number.isFinite(effectivePaid) || effectivePaid < orderTotal) {
+      if (paymentMethod !== 'debt') {
+        toast.error(`Valor pago insuficiente. Total: ${orderTotal.toFixed(2)} MZN`)
+        return
+      }
     }
 
-    setSaving(true)
     try {
-      // ENVIAR ITENS ATUALIZADOS NO FECHAMENTO
+      setSaving(true)
+      
       const closePayload = {
         payment_method: paymentMethod,
         paid: effectivePaid,
         items: closingOrder.items?.map(item => ({
-          product_id: Number(item.product_id),
+          product_id: item.product_id,
           qty: Number(item.qty || item.quantity),
           price_at_order: Number(item.price_at_order || item.price_at_sale || 0),
           cost_at_order: Number(item.cost_at_order || item.cost_at_sale || 0)
         })) || []
       }
       
-      console.log('Fechando pedido com itens atualizados:', closePayload)
       await closeOrder(closingOrder.id, closePayload)
       toast.success('Pedido finalizado e venda registrada.')
       
-      // Perguntar se deseja imprimir o recibo
-      setTimeout(() => {
-        showPrintConfirm(() => printReceiptAfterOrder(closingOrder))
-      }, 500)
-      
+      // Impressão direta após fechar (QZ Tray)
+      try {
+        const branch = await getMyBranch();
+        await printOrderReceipt({
+          ...closingOrder,
+          payment_method: paymentMethod,
+          paid: effectivePaid,
+          change: Math.max(0, effectivePaid - orderTotal)
+        }, branch);
+        toast.success('Recibo enviado para a impressora.');
+      } catch (printErr) {
+        console.error('Erro na impressão QZ Tray:', printErr);
+        // Fallback para o método térmico antigo se o QZ falhar
+        try {
+          await thermalPrinter.printReceipt({
+            sale: {
+              id: `REC-PED-${closingOrder.id}`,
+              created_at: new Date().toISOString(),
+              total: orderTotal,
+              payment_method: paymentMethod
+            },
+            items: closingOrder.items?.map(item => ({
+              name: item.product_name || `Produto #${item.product_id}`,
+              quantity: item.qty,
+              price_at_sale: Number(item.price_at_order || 0),
+              total: item.qty * Number(item.price_at_order || 0)
+            })) || [],
+            company: { name: companies?.[0]?.name || 'ERPCRM' }
+          });
+        } catch (fallbackErr) {
+          console.error('Erro no fallback de impressão:', fallbackErr);
+        }
+      }
+
       setOpenClose(false)
       setClosingOrder(null)
       await load()
     } catch (error) {
       console.error('Erro ao fechar pedido:', error)
-      toast.error('Não foi possível finalizar o pedido agora.')
+      toast.error(error?.response?.data?.detail || 'Não foi possível finalizar o pedido agora.')
     } finally {
       setSaving(false)
     }
@@ -964,6 +1018,22 @@ export default function OrdersPage() {
                   Excluir
                 </button>
               ) : null}
+
+              <button
+                type="button"
+                className="rounded-xl border border-blue-900/60 bg-blue-950/30 hover:bg-blue-950/50 px-3 py-2 text-xs font-semibold text-blue-200"
+                onClick={async () => {
+                  try {
+                    const branch = await getMyBranch();
+                    await printOrderReceipt(detailsOrder, branch);
+                    toast.success('Comprovante enviado para a impressora.');
+                  } catch (err) {
+                    toast.error('Erro na impressão: ' + err.message);
+                  }
+                }}
+              >
+                Imprimir
+              </button>
 
               <button
                 type="button"
