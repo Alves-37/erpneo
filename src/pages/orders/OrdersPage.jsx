@@ -149,42 +149,11 @@ export default function OrdersPage() {
     try {
       const data = await listOrders({ status })
       
-      let finalData = data || []
+      // CONFIAR 100% NO BACKEND - Sem mais locks ou localStorage
+      // O backend deve ser a fonte da verdade sempre
+      setRows(data || [])
+      console.log('Carregados pedidos do backend:', data?.length || 0, 'pedidos')
       
-      // FILTRO DE SEGURANÇA: Se acabamos de atualizar um pedido, ignoramos a versão do banco 
-      // se ela ainda estiver com o número de itens antigo (delay de persistência)
-      if (window.lastUpdatedOrderId && window.lastUpdatedOrderTimestamp) {
-        const now = Date.now();
-        // Manter o bloqueio por até 15 segundos para dar tempo do backend estabilizar
-        if (now - window.lastUpdatedOrderTimestamp < 15000) {
-          finalData = finalData.map(order => {
-            if (order.id === window.lastUpdatedOrderId) {
-              // Pegar o que está no localStorage como fonte da verdade absoluta durante o lock
-              try {
-                const lockedData = JSON.parse(localStorage.getItem(`order_lock_${order.id}`));
-                if (lockedData && (order.items?.length || 0) < lockedData.items.length) {
-                  console.log(`Sincronização: Mantendo pedido ${order.id} do LOCK (banco ainda desatualizado)`);
-                  return { ...order, ...lockedData };
-                }
-              } catch (e) {
-                // fallback para o rows se o localStorage falhar
-                const currentInState = rows.find(r => r.id === order.id);
-                if (currentInState && (order.items?.length || 0) < (currentInState.items?.length || 0)) {
-                  return currentInState;
-                }
-              }
-            }
-            return order;
-          });
-        } else {
-          // Limpar locks antigos
-          localStorage.removeItem(`order_lock_${window.lastUpdatedOrderId}`);
-          window.lastUpdatedOrderId = null;
-          window.lastUpdatedOrderTimestamp = null;
-        }
-      }
-
-      setRows(finalData)
     } catch {
       toast.error('Não foi possível carregar pedidos agora.')
       setRows([])
@@ -210,6 +179,8 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
+    // SEM MAIS LOCKS - Carregar diretamente do backend
+    console.log('Carregando pedidos do backend...');
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
@@ -543,62 +514,27 @@ export default function OrdersPage() {
       const response = await updateOrder(targetOrder.id, payload)
       console.log('Resposta do servidor (updateOrder):', response);
       
-      // FORÇAR ATUALIZAÇÃO DA INTERFACE COM OS DADOS QUE ENVIAMOS
-      const currentItemsWithNames = addOrderItems.map(it => ({
-        ...it,
-        product_name: productById.get(it.product_id)?.name || it.product_name || `Produto ${it.product_id}`
-      }));
-
-      const updatedOrder = {
-        ...targetOrder,
-        ...(response || {}),
-        items: currentItemsWithNames
-      };
-
-      // Guardar o ID do pedido que acabamos de atualizar para ignorar recargas obsoletas
-      window.lastUpdatedOrderId = targetOrder.id;
-      window.lastUpdatedOrderTimestamp = Date.now();
-      
-      // Guardar no localStorage como âncora de verdade persistente
-      localStorage.setItem(`order_lock_${targetOrder.id}`, JSON.stringify(updatedOrder));
-
-      setRows(currentRows => 
-        currentRows.map(row => row.id === targetOrder.id ? updatedOrder : row)
-      );
-
       toast.success('Pedido atualizado com sucesso!')
       
-      // Perguntar se deseja imprimir o ticket de cozinha (atualizado)
+      // Perguntar se deseja imprimir após 500ms
       setTimeout(() => {
         showPrintConfirm(() => printReceiptAfterOrder({
           ...orderInfoForKitchen,
           items: itemsForKitchen,
           status: 'in_progress'
         }))
-      }, 500)
-      
-      // Resetar formulário e recarregar dados
-      setOpenAddItems(false)
-      setTargetOrder(null)
-      // IMPORTANTE: Recarregar a lista de pedidos com um pequeno delay para o DB sincronizar
-      console.log('Solicitando recarga de dados...');
-      
-      // Pequeno delay antes do primeiro load para o backend refletir a mudança
-      setTimeout(async () => {
-        console.log('Primeira recarga (500ms)...');
-        await load();
       }, 500);
       
-      // Segundo delay para garantir consistência
-      setTimeout(async () => {
-        console.log('Recarga de segurança (2s)...');
-        await load();
-      }, 2000);
+      // Resetar formulário
+      setOpenAddItems(false)
+      setTargetOrder(null)
+      setAddOrderItems([])
       
+      // Recarregar dados UMA VEZ apenas - confiar no backend
+      console.log('Recarregando dados do backend...');
       setTimeout(async () => {
-        console.log('Recarga de segurança final (5s)...');
         await load();
-      }, 5000);
+      }, 500);
     } catch (err) {
       console.error('Erro ao atualizar pedido:', err);
       toast.error(err?.response?.data?.detail || 'Não foi possível atualizar o pedido.')
@@ -624,7 +560,20 @@ export default function OrdersPage() {
 
     setSaving(true)
     try {
-      await closeOrder(closingOrder.id, { payment_method: paymentMethod, paid: effectivePaid })
+      // ENVIAR ITENS ATUALIZADOS NO FECHAMENTO
+      const closePayload = {
+        payment_method: paymentMethod,
+        paid: effectivePaid,
+        items: closingOrder.items?.map(item => ({
+          product_id: Number(item.product_id),
+          qty: Number(item.qty || item.quantity),
+          price_at_order: Number(item.price_at_order || item.price_at_sale || 0),
+          cost_at_order: Number(item.cost_at_order || item.cost_at_sale || 0)
+        })) || []
+      }
+      
+      console.log('Fechando pedido com itens atualizados:', closePayload)
+      await closeOrder(closingOrder.id, closePayload)
       toast.success('Pedido finalizado e venda registrada.')
       
       // Perguntar se deseja imprimir o recibo
@@ -635,7 +584,8 @@ export default function OrdersPage() {
       setOpenClose(false)
       setClosingOrder(null)
       await load()
-    } catch {
+    } catch (error) {
+      console.error('Erro ao fechar pedido:', error)
       toast.error('Não foi possível finalizar o pedido agora.')
     } finally {
       setSaving(false)
