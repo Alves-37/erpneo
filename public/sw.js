@@ -52,6 +52,11 @@ self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
   
+  // Ignorar requisições de desenvolvimento (localhost:5173)
+  if (url.hostname === 'localhost' && url.port === '5173') {
+    return;
+  }
+  
   // Estratégia: Cache First para arquivos estáticos
   if (request.destination === 'script' || 
       request.destination === 'style' || 

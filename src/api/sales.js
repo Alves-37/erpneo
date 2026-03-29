@@ -46,6 +46,6 @@ export async function voidSale(saleId, payload) {
 }
 
 export async function editSale(saleId, payload) {
-  const res = await apiClient.put(`/sales/${Number(saleId)}/edit`, payload)
+  const res = await apiClient.put(`/sales/${Number(saleId)}`, payload)
   return res.data
 }

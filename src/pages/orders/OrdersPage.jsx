@@ -125,13 +125,14 @@ export default function OrdersPage() {
   function openAddItemsModal(o) {
     setTargetOrder(o)
     // Copiar itens existentes para edição
+    // No backend, a atualização substitui a lista de itens, então enviamos a lista completa
     const existingItems = (o.items || []).map(item => ({
       product_id: item.product_id,
       qty: item.qty,
       price_at_order: Number(item.price_at_order || 0),
       cost_at_order: Number(item.cost_at_order || 0),
-      line_total: Number(item.qty || 0) * Number(item.price_at_order || 0),
-      id: item.id // Manter ID do item original
+      line_total: Number(item.qty || 0) * Number(item.price_at_order || 0)
+      // Removido o item.id para evitar confusão no backend na substituição
     }))
     setAddOrderItems(existingItems)
     setOpenAddItems(true)
@@ -147,7 +148,43 @@ export default function OrdersPage() {
     setLoading(true)
     try {
       const data = await listOrders({ status })
-      setRows(data || [])
+      
+      let finalData = data || []
+      
+      // FILTRO DE SEGURANÇA: Se acabamos de atualizar um pedido, ignoramos a versão do banco 
+      // se ela ainda estiver com o número de itens antigo (delay de persistência)
+      if (window.lastUpdatedOrderId && window.lastUpdatedOrderTimestamp) {
+        const now = Date.now();
+        // Manter o bloqueio por até 15 segundos para dar tempo do backend estabilizar
+        if (now - window.lastUpdatedOrderTimestamp < 15000) {
+          finalData = finalData.map(order => {
+            if (order.id === window.lastUpdatedOrderId) {
+              // Pegar o que está no localStorage como fonte da verdade absoluta durante o lock
+              try {
+                const lockedData = JSON.parse(localStorage.getItem(`order_lock_${order.id}`));
+                if (lockedData && (order.items?.length || 0) < lockedData.items.length) {
+                  console.log(`Sincronização: Mantendo pedido ${order.id} do LOCK (banco ainda desatualizado)`);
+                  return { ...order, ...lockedData };
+                }
+              } catch (e) {
+                // fallback para o rows se o localStorage falhar
+                const currentInState = rows.find(r => r.id === order.id);
+                if (currentInState && (order.items?.length || 0) < (currentInState.items?.length || 0)) {
+                  return currentInState;
+                }
+              }
+            }
+            return order;
+          });
+        } else {
+          // Limpar locks antigos
+          localStorage.removeItem(`order_lock_${window.lastUpdatedOrderId}`);
+          window.lastUpdatedOrderId = null;
+          window.lastUpdatedOrderTimestamp = null;
+        }
+      }
+
+      setRows(finalData)
     } catch {
       toast.error('Não foi possível carregar pedidos agora.')
       setRows([])
@@ -375,16 +412,16 @@ export default function OrdersPage() {
       updated[existingIndex] = { 
         ...updated[existingIndex], 
         qty: newQty,
-        line_total: newQty * (updated[existingIndex].price_at_order || 0)
+        line_total: Number((newQty * (updated[existingIndex].price_at_order || 0)).toFixed(2))
       }
       setAddOrderItems(updated)
     } else {
       const newItem = {
         product_id: product.id,
         qty: 1,
-        price_at_order: product.price,
-        cost_at_order: product.cost || 0,
-        line_total: product.price
+        price_at_order: Number(product.price || 0),
+        cost_at_order: Number(product.cost || 0),
+        line_total: Number(product.price || 0)
       }
       setAddOrderItems([...addOrderItems, newItem])
     }
@@ -485,37 +522,83 @@ export default function OrdersPage() {
       // Mapear itens para o formato que o backend espera
       // IMPORTANTE: Garantir que os campos correspondam ao esperado pelo model OrderUpdate
       const payload = {
-        table_number: targetOrder.table_number,
-        seat_number: targetOrder.seat_number,
+        table_number: Number(targetOrder.table_number),
+        seat_number: Number(targetOrder.seat_number),
         items: addOrderItems.map(item => ({
           product_id: Number(item.product_id),
           qty: Number(item.qty),
+          // Enviamos apenas product_id e qty para deixar o backend gerir preços e custos se necessário,
+          // ou enviamos tudo se o backend exigir.
           price_at_order: Number(item.price_at_order || 0),
           cost_at_order: Number(item.cost_at_order || 0)
         }))
       };
 
-      console.log('Payload enviado para updateOrder:', payload);
+      console.log('Payload enviado para updateOrder (JSON):', JSON.stringify(payload, null, 2));
 
-      await updateOrder(targetOrder.id, payload)
+      // Guardar uma cópia dos itens para o ticket de cozinha antes de limpar
+      const itemsForKitchen = [...addOrderItems];
+      const orderInfoForKitchen = { ...targetOrder };
+
+      const response = await updateOrder(targetOrder.id, payload)
+      console.log('Resposta do servidor (updateOrder):', response);
+      
+      // FORÇAR ATUALIZAÇÃO DA INTERFACE COM OS DADOS QUE ENVIAMOS
+      const currentItemsWithNames = addOrderItems.map(it => ({
+        ...it,
+        product_name: productById.get(it.product_id)?.name || it.product_name || `Produto ${it.product_id}`
+      }));
+
+      const updatedOrder = {
+        ...targetOrder,
+        ...(response || {}),
+        items: currentItemsWithNames
+      };
+
+      // Guardar o ID do pedido que acabamos de atualizar para ignorar recargas obsoletas
+      window.lastUpdatedOrderId = targetOrder.id;
+      window.lastUpdatedOrderTimestamp = Date.now();
+      
+      // Guardar no localStorage como âncora de verdade persistente
+      localStorage.setItem(`order_lock_${targetOrder.id}`, JSON.stringify(updatedOrder));
+
+      setRows(currentRows => 
+        currentRows.map(row => row.id === targetOrder.id ? updatedOrder : row)
+      );
+
       toast.success('Pedido atualizado com sucesso!')
       
       // Perguntar se deseja imprimir o ticket de cozinha (atualizado)
       setTimeout(() => {
         showPrintConfirm(() => printReceiptAfterOrder({
-          ...targetOrder,
-          items: addOrderItems, // Itens atualizados
-          status: 'in_progress' // Garante fluxo de ticket de cozinha
+          ...orderInfoForKitchen,
+          items: itemsForKitchen,
+          status: 'in_progress'
         }))
       }, 500)
       
       // Resetar formulário e recarregar dados
       setOpenAddItems(false)
       setTargetOrder(null)
-      setAddOrderItems([])
+      // IMPORTANTE: Recarregar a lista de pedidos com um pequeno delay para o DB sincronizar
+      console.log('Solicitando recarga de dados...');
       
-      // IMPORTANTE: Recarregar a lista de pedidos
-      await load()
+      // Pequeno delay antes do primeiro load para o backend refletir a mudança
+      setTimeout(async () => {
+        console.log('Primeira recarga (500ms)...');
+        await load();
+      }, 500);
+      
+      // Segundo delay para garantir consistência
+      setTimeout(async () => {
+        console.log('Recarga de segurança (2s)...');
+        await load();
+      }, 2000);
+      
+      setTimeout(async () => {
+        console.log('Recarga de segurança final (5s)...');
+        await load();
+      }, 5000);
     } catch (err) {
       console.error('Erro ao atualizar pedido:', err);
       toast.error(err?.response?.data?.detail || 'Não foi possível atualizar o pedido.')
@@ -799,12 +882,14 @@ export default function OrdersPage() {
             </div>
 
             <div className="grid gap-2">
-              {(detailsOrder.items || []).map((it) => {
+              {(detailsOrder.items || []).map((it, idx) => {
                 const p = productById.get(it.product_id)
                 const rawUrl = imageByProductId?.[it.product_id] || null
                 const url = rawUrl && rawUrl.startsWith('/') ? `${apiBaseUrl}${rawUrl}` : rawUrl
+                // Usar it.id se existir, caso contrário combinar product_id e index para garantir unicidade
+                const itemKey = it.id || `item-${it.product_id}-${idx}`
                 return (
-                  <div key={it.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                  <div key={itemKey} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-12 w-12 overflow-hidden rounded-xl bg-slate-900">
                         {url ? (
@@ -814,10 +899,10 @@ export default function OrdersPage() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-slate-100" title={p?.name || ''}>
-                          {p?.name || `Produto ${it.product_id}`}
+                        <div className="truncate text-sm font-bold text-slate-100" title={it.product_name || p?.name || ''}>
+                          {it.product_name || p?.name || `Produto ${it.product_id}`}
                         </div>
-                        <div className="mt-0.5 text-xs text-slate-400">Qtd: {Number(it.qty || 0)}</div>
+                        <div className="mt-0.5 text-xs text-slate-400 font-medium">Qtd: {Number(it.qty || 0)}</div>
                       </div>
                     </div>
                     <div className="text-sm font-semibold text-white">{Number(it.line_total || 0).toFixed(2)}</div>
