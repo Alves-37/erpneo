@@ -56,12 +56,7 @@ function parseDecimal(value) {
 }
 
 export default function PdvPage() {
-  // 🔍 LOGGING AO CARREGAR PDV
   useEffect(() => {
-    console.log('🛒 [PDV] PdvPage.jsx montado')
-    console.log('📍 [PDV] URL atual:', window.location.href)
-    console.log('🛤️ [PDV] Pathname:', window.location.pathname)
-    console.log('🔍 [PDV] Verificando itens do pedido no sessionStorage...')
   }, [])
 
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://neoerp-production.up.railway.app'
@@ -683,22 +678,16 @@ async function loadInitial() {
         const info = JSON.parse(orderInfo)
         const items = JSON.parse(orderItems)
         
-        console.log('📋 [PDV] Carregando pedido:', info.order_id)
-        
         // 1. Definir mesa e cliente primeiro
         if (info.table_number) {
-          console.log('🪑 [PDV] Set mesa:', info.table_number)
           setTableNumber(String(info.table_number))
         }
         if (info.seat_number) {
-          console.log('💺 [PDV] Set cliente:', info.seat_number)
           setSeatNumber(String(info.seat_number))
         }
 
         // 2. Mudar canal de venda IMEDIATAMENTE se houver mesa
-        // Isso ativa o isTableOrder que muda o botão para "Processar pedido"
         if (info.table_number || info.order_type === 'table') {
-          console.log('🍽️ [PDV] Ativando canal MESA para garantir botão correto')
           setSaleChannel('table')
         }
         
@@ -713,7 +702,6 @@ async function loadInitial() {
           
           const newCartWithOrder = {}
           items.forEach(item => {
-            // PRESERVAR order_id PARA ATUALIZAÇÃO
             newCartWithOrder[String(item.product_id)] = {
               qty: Number(item.quantity || item.qty || 1),
               order_id: info.order_id
@@ -731,10 +719,10 @@ async function loadInitial() {
           sessionStorage.removeItem('pdv_order_info')
           
           toast.success(`Pedido #${info.order_id} carregado na Mesa ${info.table_number}`)
-        }, 1500) // Aumentado para 1.5s para garantir total estabilidade
+        }, 1500)
 
       } catch (error) {
-        console.error('❌ [PDV] Falha na carga:', error)
+        console.error('Falha na carga do pedido:', error)
       }
     }
   }, [productCache])

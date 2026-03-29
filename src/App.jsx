@@ -68,96 +68,24 @@ function RestaurantOnlyRoute({ children }) {
   }, [branch?.business_type])
 
   if (allowed === null) return null
-  if (!allowed) {
-    console.log('🚫 [APP] RestaurantOnlyRoute: Acesso negado, redirecionando para /dashboard', { 
-      branch_type: branch?.business_type,
-      path: window.location.pathname 
-    })
-    return <Navigate to="/dashboard" replace />
-  }
+  if (!allowed) return <Navigate to="/dashboard" replace />
   return children
 }
 
 function App() {
-  // 🔍 LOGGING GLOBAL DE ROTEAMENTO
-  useEffect(() => {
-    console.log('🌐 [APP] App.jsx montado')
-    console.log('📍 [APP] URL atual:', window.location.href)
-    console.log('🛤️ [APP] Pathname:', window.location.pathname)
-    
-    // Log quando a rota mudar
-    const handleRouteChange = () => {
-      const realPath = window.location.pathname
-      const realUrl = window.location.href
-      
-      console.log('🔄 [APP] Rota mudou para:', realPath)
-      console.log('🌐 [APP] URL completa:', realUrl)
-      console.trace('🛤️ [APP] Stack trace da mudança de rota:')
-      
-      // 🚨 VERIFICAÇÃO REAL: Qual página realmente está visível?
-      setTimeout(() => {
-        const actualPath = window.location.pathname
-        const actualUrl = window.location.href
-        
-        console.log('🔍 [APP] VERIFICAÇÃO REAL após 500ms:')
-        console.log('📍 [APP] Pathname real:', actualPath)
-        console.log('🌐 [APP] URL real:', actualUrl)
-        
-        // Verificar se realmente mudou
-        if (actualPath === '/pos') {
-          console.log('✅ [APP] SUCESSO: Realmente está no PDV!')
-        } else if (actualPath === '/dashboard') {
-          console.log('❌ [APP] PROBLEMA: Ainda está no Dashboard!')
-          console.log('🚨 [APP] O redirecionamento para /pos falhou!')
-        } else {
-          console.log('❓ [APP] Inesperado: Está em:', actualPath)
-        }
-      }, 500)
-    }
-    
-    // Observer para mudanças de URL
-    const originalPushState = window.history.pushState
-    const originalReplaceState = window.history.replaceState
-    
-    window.history.pushState = function(...args) {
-      console.log('🔀 [APP] pushState chamado com:', args)
-      const result = originalPushState.apply(this, args)
-      handleRouteChange()
-      return result
-    }
-    
-    window.history.replaceState = function(...args) {
-      console.log('🔀 [APP] replaceState chamado com:', args)
-      const result = originalReplaceState.apply(this, args)
-      handleRouteChange()
-      return result
-    }
-    
-    window.addEventListener('popstate', handleRouteChange)
-    
-    return () => {
-      window.history.pushState = originalPushState
-      window.history.replaceState = originalReplaceState
-      window.removeEventListener('popstate', handleRouteChange)
-    }
-  }, [])
-
   return (
     <>
       <ToastHost />
       <Routes>
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<LoginPage />} />
-        </Route>
-
+        <Route path="/login" element={<LoginPage />} />
         <Route
+          path="/"
           element={
             <PrivateRoute>
               <DashboardLayout />
             </PrivateRoute>
           }
         >
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route
@@ -170,13 +98,11 @@ function App() {
           />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/stock" element={<StockPage />} />
+          <Route path="/stock/warehouses" element={<WarehousePage />} />
           <Route path="/stock/history" element={<StockHistoryPage />} />
           <Route path="/stock/transfer" element={<StockTransferPage />} />
-          <Route path="/stock/adjust" element={<StockAdjustmentPage />} />
-          <Route path="/warehouse" element={<WarehousePage />} />
+          <Route path="/stock/adjustment" element={<StockAdjustmentPage />} />
           <Route path="/sales" element={<SalesPage />} />
-          <Route path="/debts" element={<DebtsPage />} />
-          <Route path="/returns" element={<ReturnsPage />} />
           <Route
             path="/reservations"
             element={
@@ -210,13 +136,24 @@ function App() {
               </RestaurantOnlyRoute>
             }
           />
-          <Route path="/reprography/billing" element={<ReprographyBillingPage />} />
-          <Route path="/reprography/printers" element={<ReprographyPrintersPage />} />
-          <Route path="/reprography/readings" element={<ReprographyReadingsPage />} />
+          <Route path="/debts" element={<DebtsPage />} />
+          <Route path="/returns" element={<ReturnsPage />} />
           <Route path="/finance" element={<FinancePage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route
+            path="/reprography/billing"
+            element={<ReprographyBillingPage />}
+          />
+          <Route
+            path="/reprography/printers"
+            element={<ReprographyPrintersPage />}
+          />
+          <Route
+            path="/reprography/readings"
+            element={<ReprographyReadingsPage />}
+          />
           <Route path="/establishments" element={<EstablishmentsPage />} />
         </Route>
 

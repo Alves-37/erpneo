@@ -123,91 +123,37 @@ export default function OrdersPage() {
   }
 
   function openAddItemsModal(o) {
-    // 🚨 PRIMEIRO LOG - deve aparecer imediatamente
-    console.log('🚨🚨🚨 [ORDERS] FUNÇÃO openAddItemsModal CHAMADA! 🚨🚨🚨')
-    console.log('🔄 [ORDERS] Redirecionando para PDV com itens do pedido:', o.id)
-    console.log('📋 [ORDERS] Estrutura completa do pedido:', JSON.stringify(o, null, 2))
-    console.log('📊 [ORDERS] Tem itens?', !!o.items)
-    console.log('📊 [ORDERS] Quantidade de itens:', o.items?.length || 0)
-    console.log('🌐 [ORDERS] URL atual:', window.location.href)
-    console.log('🛤️ [ORDERS] Tentando redirecionar para:', '/pdv')
-    
-    // 🚨 VERIFICAÇÃO: Se não tem itens, não continua
-    if (!o.items || o.items.length === 0) {
-      console.log('⚠️ [ORDERS] Pedido não tem itens! Abortando...')
-      toast.error('Este pedido não tem itens para adicionar')
-      return
-    }
-    
-    console.log('✅ [ORDERS] Passou na verificação de itens - continue...')
-    console.log('🔄 [ORDERS] Executando processo imediatamente (sem timeout)...')
-    
     try {
-      console.log('🔄 [ORDERS] Iniciando try block...')
+      const orderItems = (o.items || []).map(item => ({
+        product_id: item.product_id,
+        product_name: item.product_name || `Produto #${item.product_id}`,
+        quantity: item.qty || 1,
+        unit_price: item.price_at_order,
+        total: item.line_total,
+        order_id: o.id,
+        order_table_number: o.table_number,
+        order_seat_number: o.seat_number
+      }))
       
-      // Preparar itens para o carrinho do PDV
-      console.log('🛒 [ORDERS] Preparando itens para o carrinho...')
-      const orderItems = (o.items || []).map(item => {
-        console.log('🔍 [ORDERS] Processando item:', item)
-        return {
-          product_id: item.product_id,
-          product_name: item.product_name || `Produto #${item.product_id}`,
-          quantity: item.qty || item.quantity || 1,
-          unit_price: Number(item.price_at_order || item.price_at_sale || 0),
-          total: Number((item.qty || item.quantity || 1) * Number(item.price_at_order || item.price_at_sale || 0)),
-          // Informações do pedido para referência
-          order_id: o.id,
-          order_table_number: o.table_number,
-          order_seat_number: o.seat_number
-        }
-      })
+      if (!orderItems.length) {
+        toast.error('Este pedido não tem itens para adicionar')
+        return
+      }
       
-      console.log('🛒 [ORDERS] Itens preparados para PDV:', JSON.stringify(orderItems, null, 2))
-      console.log('📊 [ORDERS] Quantidade de itens preparados:', orderItems.length)
-      
-      // Salvar no sessionStorage para o PDV recuperar
-      console.log('💾 [ORDERS] Salvando no sessionStorage...')
       sessionStorage.setItem('pdv_order_items', JSON.stringify(orderItems))
       sessionStorage.setItem('pdv_order_info', JSON.stringify({
         order_id: o.id,
         table_number: o.table_number,
         seat_number: o.seat_number,
+        order_type: o.order_type,
         status: o.status
       }))
       
-      console.log('✅ [ORDERS] SessionStorage.setItems executado!')
-      
-      // 🔍 VERIFICAÇÃO: Verificar se salvou corretamente
-      const savedItems = sessionStorage.getItem('pdv_order_items')
-      const savedInfo = sessionStorage.getItem('pdv_order_info')
-      console.log('🔍 [ORDERS] Verificação pós-salvamento:')
-      console.log('📦 [ORDERS] orderItems salvos:', !!savedItems)
-      console.log('📋 [ORDERS] orderInfo salvos:', !!savedInfo)
-      console.log('📊 [ORDERS] Tamanho dos itens:', savedItems?.length || 0)
-      console.log('📊 [ORDERS] Tamanho da info:', savedInfo?.length || 0)
-      
-      if (savedItems) {
-        console.log('📋 [ORDERS] Conteúdo dos itens:', savedItems.substring(0, 200) + '...')
-      }
-      if (savedInfo) {
-        console.log('📋 [ORDERS] Conteúdo da info:', savedInfo)
-      }
-      
-      console.log('💾 [ORDERS] Itens salvos no sessionStorage')
-      console.log('🚀 [ORDERS] Executando redirecionamento para /pdv...')
-      
-      // Tentar redirecionamento
       window.location.href = '/pdv'
       
     } catch (error) {
-      console.error('❌ [ORDERS] Erro ao preparar redirecionamento para PDV:', error)
       toast.error('Erro ao redirecionar para PDV: ' + error.message)
     }
-    
-    // Não abrir mais o modal
-    // setTargetOrder(o)
-    // setAddOrderItems(existingItems)
-    // setOpenAddItems(true)
   }
 
   const productById = useMemo(() => {
@@ -219,17 +165,10 @@ export default function OrdersPage() {
   async function load() {
     setLoading(true)
     try {
-      const data = await listOrders({ status })
-      
-      // CONFIAR 100% NO BACKEND - Sem mais locks ou localStorage
-      // O backend deve ser a fonte da verdade sempre
-      console.log('Dados brutos do backend:', JSON.stringify(data, null, 2))
+      const { data } = await listOrders({ status, limit: 200, offset: 0 })
       setRows(data || [])
-      console.log('Carregados pedidos do backend:', data?.length || 0, 'pedidos')
-      
     } catch {
       toast.error('Não foi possível carregar pedidos agora.')
-      setRows([])
     } finally {
       setLoading(false)
     }
@@ -252,10 +191,7 @@ export default function OrdersPage() {
   }
 
   useEffect(() => {
-    // SEM MAIS LOCKS - Carregar diretamente do backend
-    console.log('Carregando pedidos do backend...');
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
   useEffect(() => {
@@ -1002,12 +938,7 @@ export default function OrdersPage() {
                   type="button"
                   className="rounded-xl border border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50 px-3 py-2 text-xs font-semibold text-emerald-200"
                   onClick={() => {
-                    console.log('🚨🚨🚨 [BOTÃO] BOTÃO "ADICIONAR ITENS" CLICADO! 🚨🚨🚨')
-                    console.log('📋 [BOTÃO] detailsOrder:', detailsOrder)
-                    setOpenDetails(false)
-                    console.log('🔄 [BOTÃO] Chamando openAddItemsModal...')
                     openAddItemsModal(detailsOrder)
-                    console.log('✅ [BOTÃO] openAddItemsModal chamado!')
                   }}
                 >
                   Adicionar Itens
