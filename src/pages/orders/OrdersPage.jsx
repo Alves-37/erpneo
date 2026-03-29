@@ -123,29 +123,50 @@ export default function OrdersPage() {
   }
 
   function openAddItemsModal(o) {
-    // 🛒 REDIRECIONAR PARA PDV em vez de abrir modal
+    // 🚨 PRIMEIRO LOG - deve aparecer imediatamente
+    console.log('🚨🚨🚨 [ORDERS] FUNÇÃO openAddItemsModal CHAMADA! 🚨🚨🚨')
     console.log('🔄 [ORDERS] Redirecionando para PDV com itens do pedido:', o.id)
-    console.log('📋 [ORDERS] Itens atuais do pedido:', JSON.stringify(o.items, null, 2))
+    console.log('📋 [ORDERS] Estrutura completa do pedido:', JSON.stringify(o, null, 2))
+    console.log('📊 [ORDERS] Tem itens?', !!o.items)
+    console.log('📊 [ORDERS] Quantidade de itens:', o.items?.length || 0)
     console.log('🌐 [ORDERS] URL atual:', window.location.href)
-    console.log('🛤️ [ORDERS] Tentando redirecionar para:', '/pos')
+    console.log('🛤️ [ORDERS] Tentando redirecionar para:', '/pdv')
+    
+    // 🚨 VERIFICAÇÃO: Se não tem itens, não continua
+    if (!o.items || o.items.length === 0) {
+      console.log('⚠️ [ORDERS] Pedido não tem itens! Abortando...')
+      toast.error('Este pedido não tem itens para adicionar')
+      return
+    }
+    
+    console.log('✅ [ORDERS] Passou na verificação de itens - continue...')
+    console.log('🔄 [ORDERS] Executando processo imediatamente (sem timeout)...')
     
     try {
+      console.log('🔄 [ORDERS] Iniciando try block...')
+      
       // Preparar itens para o carrinho do PDV
-      const orderItems = (o.items || []).map(item => ({
-        product_id: item.product_id,
-        product_name: item.product_name || `Produto #${item.product_id}`,
-        quantity: item.qty || item.quantity || 1,
-        unit_price: Number(item.price_at_order || item.price_at_sale || 0),
-        total: Number((item.qty || item.quantity || 1) * Number(item.price_at_order || item.price_at_sale || 0)),
-        // Informações do pedido para referência
-        order_id: o.id,
-        order_table_number: o.table_number,
-        order_seat_number: o.seat_number
-      }))
+      console.log('🛒 [ORDERS] Preparando itens para o carrinho...')
+      const orderItems = (o.items || []).map(item => {
+        console.log('🔍 [ORDERS] Processando item:', item)
+        return {
+          product_id: item.product_id,
+          product_name: item.product_name || `Produto #${item.product_id}`,
+          quantity: item.qty || item.quantity || 1,
+          unit_price: Number(item.price_at_order || item.price_at_sale || 0),
+          total: Number((item.qty || item.quantity || 1) * Number(item.price_at_order || item.price_at_sale || 0)),
+          // Informações do pedido para referência
+          order_id: o.id,
+          order_table_number: o.table_number,
+          order_seat_number: o.seat_number
+        }
+      })
       
       console.log('🛒 [ORDERS] Itens preparados para PDV:', JSON.stringify(orderItems, null, 2))
+      console.log('📊 [ORDERS] Quantidade de itens preparados:', orderItems.length)
       
       // Salvar no sessionStorage para o PDV recuperar
+      console.log('💾 [ORDERS] Salvando no sessionStorage...')
       sessionStorage.setItem('pdv_order_items', JSON.stringify(orderItems))
       sessionStorage.setItem('pdv_order_info', JSON.stringify({
         order_id: o.id,
@@ -154,11 +175,29 @@ export default function OrdersPage() {
         status: o.status
       }))
       
-      console.log('💾 [ORDERS] Itens salvos no sessionStorage')
-      console.log('🚀 [ORDERS] Forçando redirecionamento com window.location.replace')
+      console.log('✅ [ORDERS] SessionStorage.setItems executado!')
       
-      // � FORÇAR REDIRECIONAMENTO COM replace (não pode ser interceptado)
-      window.location.replace('/pos')
+      // 🔍 VERIFICAÇÃO: Verificar se salvou corretamente
+      const savedItems = sessionStorage.getItem('pdv_order_items')
+      const savedInfo = sessionStorage.getItem('pdv_order_info')
+      console.log('🔍 [ORDERS] Verificação pós-salvamento:')
+      console.log('📦 [ORDERS] orderItems salvos:', !!savedItems)
+      console.log('📋 [ORDERS] orderInfo salvos:', !!savedInfo)
+      console.log('📊 [ORDERS] Tamanho dos itens:', savedItems?.length || 0)
+      console.log('📊 [ORDERS] Tamanho da info:', savedInfo?.length || 0)
+      
+      if (savedItems) {
+        console.log('📋 [ORDERS] Conteúdo dos itens:', savedItems.substring(0, 200) + '...')
+      }
+      if (savedInfo) {
+        console.log('📋 [ORDERS] Conteúdo da info:', savedInfo)
+      }
+      
+      console.log('💾 [ORDERS] Itens salvos no sessionStorage')
+      console.log('🚀 [ORDERS] Executando redirecionamento para /pdv...')
+      
+      // Tentar redirecionamento
+      window.location.href = '/pdv'
       
     } catch (error) {
       console.error('❌ [ORDERS] Erro ao preparar redirecionamento para PDV:', error)
@@ -963,8 +1002,12 @@ export default function OrdersPage() {
                   type="button"
                   className="rounded-xl border border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50 px-3 py-2 text-xs font-semibold text-emerald-200"
                   onClick={() => {
+                    console.log('🚨🚨🚨 [BOTÃO] BOTÃO "ADICIONAR ITENS" CLICADO! 🚨🚨🚨')
+                    console.log('📋 [BOTÃO] detailsOrder:', detailsOrder)
                     setOpenDetails(false)
+                    console.log('🔄 [BOTÃO] Chamando openAddItemsModal...')
                     openAddItemsModal(detailsOrder)
+                    console.log('✅ [BOTÃO] openAddItemsModal chamado!')
                   }}
                 >
                   Adicionar Itens

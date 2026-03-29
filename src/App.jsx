@@ -68,7 +68,13 @@ function RestaurantOnlyRoute({ children }) {
   }, [branch?.business_type])
 
   if (allowed === null) return null
-  if (!allowed) return <Navigate to="/dashboard" replace />
+  if (!allowed) {
+    console.log('🚫 [APP] RestaurantOnlyRoute: Acesso negado, redirecionando para /dashboard', { 
+      branch_type: branch?.business_type,
+      path: window.location.pathname 
+    })
+    return <Navigate to="/dashboard" replace />
+  }
   return children
 }
 
@@ -86,6 +92,7 @@ function App() {
       
       console.log('🔄 [APP] Rota mudou para:', realPath)
       console.log('🌐 [APP] URL completa:', realUrl)
+      console.trace('🛤️ [APP] Stack trace da mudança de rota:')
       
       // 🚨 VERIFICAÇÃO REAL: Qual página realmente está visível?
       setTimeout(() => {

@@ -297,21 +297,45 @@ export default function PdvPage() {
     return out
   }, [items, activeCategoryId, q, isRestaurant])
 
+  const cartKey = useMemo(() => {
+    if (!isRestaurant) return 'counter'
+    if (saleChannel !== 'table') return 'counter'
+    const t = String(tableNumber || '').trim()
+    const s = String(seatNumber || '').trim()
+    if (!t || !s) return 'counter'
+    return `table:${t}:${s}`
+  }, [isRestaurant, saleChannel, tableNumber, seatNumber])
+
   const cartLines = useMemo(() => {
     const lines = []
-    for (const [id, qty] of Object.entries(cart || {})) {
+    const currentCartData = cartsByKey?.[cartKey] || cart || {}
+    
+    for (const [id, data] of Object.entries(currentCartData)) {
       const pid = Number(id)
-      const qn = Number(qty || 0)
+      // data can be a number (qty) or an object {qty, order_id}
+      const qn = typeof data === 'object' ? Number(data.qty || 0) : Number(data || 0)
+      const orderId = typeof data === 'object' ? data.order_id : null
+      
       if (!qn) continue
       const p = productById.get(pid)
-      if (!p) continue
-      const price = Number(p.price || 0)
-      const lineTotal = price * qn
-      lines.push({ product: p, qty: qn, price, lineTotal })
+      
+      if (p) {
+        const price = Number(p.price || 0)
+        const lineTotal = price * qn
+        lines.push({ product: p, qty: qn, price, lineTotal, order_id: orderId })
+      } else {
+        const basicProduct = {
+          id: pid,
+          name: `Produto #${pid}`,
+          price: 0,
+        }
+        lines.push({ product: basicProduct, qty: qn, price: 0, lineTotal: 0, order_id: orderId })
+      }
     }
+    
     lines.sort((a, b) => b.product.id - a.product.id)
     return lines
-  }, [cart, productById])
+  }, [cart, productById, cartsByKey, cartKey])
 
   const cartItemsCount = useMemo(() => {
     return cartLines.reduce((acc, l) => acc + Number(l.qty || 0), 0)
@@ -350,14 +374,6 @@ export default function PdvPage() {
     return Math.max(0, grossTotal - appliedDiscount)
   }, [grossTotal, appliedDiscount])
 
-  const cartKey = useMemo(() => {
-    if (!isRestaurant) return 'counter'
-    if (saleChannel !== 'table') return 'counter'
-    const t = String(tableNumber || '').trim()
-    const s = String(seatNumber || '').trim()
-    if (!t || !s) return 'counter'
-    return `table:${t}:${s}`
-  }, [isRestaurant, saleChannel, tableNumber, seatNumber])
 
   const selectedTable = useMemo(() => {
     const n = Number(String(tableNumber || '').trim())
@@ -659,80 +675,69 @@ async function loadInitial() {
 
   // 🛒 CARREGAR ITENS DO PEDIDO (VINDO DA PÁGINA DE PEDIDOS)
   useEffect(() => {
-    console.log('🔍 PDV: Verificando itens do pedido no sessionStorage...')
-    
-    // Verificar se há itens do pedido no sessionStorage
     const orderItems = sessionStorage.getItem('pdv_order_items')
     const orderInfo = sessionStorage.getItem('pdv_order_info')
     
-    console.log('📦 orderItems encontrado:', !!orderItems)
-    console.log('📋 orderInfo encontrado:', !!orderInfo)
-    
     if (orderItems && orderInfo) {
       try {
-        const items = JSON.parse(orderItems)
         const info = JSON.parse(orderInfo)
+        const items = JSON.parse(orderItems)
         
-        console.log('🛒 PDV: Carregando itens do pedido:', items)
-        console.log('📋 PDV: Informações do pedido:', info)
+        console.log('📋 [PDV] Carregando pedido:', info.order_id)
         
-        // Preencher informações da mesa/cliente
+        // 1. Definir mesa e cliente primeiro
         if (info.table_number) {
-          console.log('🪑 Definindo número da mesa:', info.table_number)
+          console.log('🪑 [PDV] Set mesa:', info.table_number)
           setTableNumber(String(info.table_number))
         }
         if (info.seat_number) {
-          console.log('💺 Definindo número do cliente:', info.seat_number)
+          console.log('💺 [PDV] Set cliente:', info.seat_number)
           setSeatNumber(String(info.seat_number))
         }
-        
-        // Mudar para o canal de vendas de mesa se for pedido de mesa
-        if (isRestaurant && info.table_number) {
-          console.log('🍽️ Mudando para canal de mesa')
+
+        // 2. Mudar canal de venda IMEDIATAMENTE se houver mesa
+        // Isso ativa o isTableOrder que muda o botão para "Processar pedido"
+        if (info.table_number || info.order_type === 'table') {
+          console.log('🍽️ [PDV] Ativando canal MESA para garantir botão correto')
           setSaleChannel('table')
         }
         
-        // Carregar itens no carrinho
-        const newCart = {}
-        items.forEach(item => {
-          const key = String(item.product_id)
-          newCart[key] = {
-            product_id: item.product_id,
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total: item.total,
-            order_id: item.order_id, // Guardar referência do pedido
-            order_table_number: item.order_table_number,
-            order_seat_number: item.order_seat_number
-          }
-        })
-        
-        console.log('🛒 Carrinho preparado:', newCart)
-        setCart(newCart)
-        
-        // Mostrar notificação
-        toast.success(`Carregados ${items.length} itens do pedido #${info.order_id}`)
-        
-        // Limpar sessionStorage após carregar
-        sessionStorage.removeItem('pdv_order_items')
-        sessionStorage.removeItem('pdv_order_info')
-        
-        console.log('✅ Itens do pedido carregados com sucesso!')
-        
+        // 3. Delay para o React atualizar os estados acima e o cartKey mudar
+        setTimeout(() => {
+          const t = String(info.table_number || '').trim()
+          const s = String(info.seat_number || '').trim()
+          
+          // LÓGICA DE KEY: Se tem mesa, o destino É uma mesa
+          const isTable = info.order_type === 'table' || (t !== '')
+          const targetKey = isTable ? `table:${t}:${s || '1'}` : 'counter'
+          
+          const newCartWithOrder = {}
+          items.forEach(item => {
+            // PRESERVAR order_id PARA ATUALIZAÇÃO
+            newCartWithOrder[String(item.product_id)] = {
+              qty: Number(item.quantity || item.qty || 1),
+              order_id: info.order_id
+            }
+          })
+          
+          // Injeta no dicionário global usando o formato complexo
+          setCartsByKey(prev => ({ ...prev, [targetKey]: newCartWithOrder }))
+          
+          // O cart local também deve refletir a mudança
+          setCart(newCartWithOrder)
+          
+          // Limpa a sessão
+          sessionStorage.removeItem('pdv_order_items')
+          sessionStorage.removeItem('pdv_order_info')
+          
+          toast.success(`Pedido #${info.order_id} carregado na Mesa ${info.table_number}`)
+        }, 1500) // Aumentado para 1.5s para garantir total estabilidade
+
       } catch (error) {
-        console.error('❌ Erro ao carregar itens do pedido:', error)
-        toast.error('Erro ao carregar itens do pedido: ' + error.message)
-        
-        // Limpar sessionStorage em caso de erro
-        sessionStorage.removeItem('pdv_order_items')
-        sessionStorage.removeItem('pdv_order_info')
+        console.error('❌ [PDV] Falha na carga:', error)
       }
-    } else {
-      console.log('ℹ️ Nenhum item do pedido encontrado para carregar')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Executar apenas uma vez ao carregar a página
+  }, [productCache])
 
   useEffect(() => {
     if (!isRestaurant) return
@@ -766,10 +771,23 @@ async function loadInitial() {
       return
     }
     
+    // 🔍 RECUPERAR order_id EXISTENTE NO CARRINHO
+    const existingOrderId = cartLines.find(l => l.order_id)?.order_id
+
     setCart((prev) => {
       const next = { ...(prev || {}) }
-      const cur = Number(next[p.id] || 0)
-      next[p.id] = cur + 1
+      const currentEntry = next[p.id]
+      
+      if (typeof currentEntry === 'object') {
+        next[p.id] = { ...currentEntry, qty: (currentEntry.qty || 0) + 1 }
+      } else {
+        const curQty = Number(currentEntry || 0)
+        if (existingOrderId) {
+          next[p.id] = { qty: curQty + 1, order_id: existingOrderId }
+        } else {
+          next[p.id] = curQty + 1
+        }
+      }
       return next
     })
   }
@@ -883,14 +901,28 @@ async function loadInitial() {
   }, [isPharmacy, items])
 
   function setQty(productId, qty) {
+    // 🔍 RECUPERAR order_id EXISTENTE NO CARRINHO
+    const existingOrderId = cartLines.find(l => l.order_id)?.order_id
+
     setCart((prev) => {
       const next = { ...(prev || {}) }
       const qn = typeof qty === 'number' ? qty : parseDecimal(qty)
+      
       if (!Number.isFinite(qn) || qn <= 0) {
         delete next[productId]
         return next
       }
-      next[productId] = qn
+
+      const currentEntry = next[productId]
+      if (typeof currentEntry === 'object') {
+        next[productId] = { ...currentEntry, qty: qn }
+      } else {
+        if (existingOrderId) {
+          next[productId] = { qty: qn, order_id: existingOrderId }
+        } else {
+          next[productId] = qn
+        }
+      }
       return next
     })
   }
