@@ -124,33 +124,44 @@ export default function OrdersPage() {
 
   function openAddItemsModal(o) {
     // 🛒 REDIRECIONAR PARA PDV em vez de abrir modal
-    console.log('Redirecionando para PDV com itens do pedido:', o.id)
-    console.log('Itens atuais do pedido:', JSON.stringify(o.items, null, 2))
+    console.log('🔄 Redirecionando para PDV com itens do pedido:', o.id)
+    console.log('📋 Itens atuais do pedido:', JSON.stringify(o.items, null, 2))
     
-    // Preparar itens para o carrinho do PDV
-    const orderItems = (o.items || []).map(item => ({
-      product_id: item.product_id,
-      product_name: item.product_name || `Produto #${item.product_id}`,
-      quantity: item.qty || item.quantity || 1,
-      unit_price: Number(item.price_at_order || item.price_at_sale || 0),
-      total: Number((item.qty || item.quantity || 1) * Number(item.price_at_order || item.price_at_sale || 0)),
-      // Informações do pedido para referência
-      order_id: o.id,
-      order_table_number: o.table_number,
-      order_seat_number: o.seat_number
-    }))
-    
-    // Salvar no sessionStorage para o PDV recuperar
-    sessionStorage.setItem('pdv_order_items', JSON.stringify(orderItems))
-    sessionStorage.setItem('pdv_order_info', JSON.stringify({
-      order_id: o.id,
-      table_number: o.table_number,
-      seat_number: o.seat_number,
-      status: o.status
-    }))
-    
-    // Redirecionar para PDV
-    window.location.href = '/pos'
+    try {
+      // Preparar itens para o carrinho do PDV
+      const orderItems = (o.items || []).map(item => ({
+        product_id: item.product_id,
+        product_name: item.product_name || `Produto #${item.product_id}`,
+        quantity: item.qty || item.quantity || 1,
+        unit_price: Number(item.price_at_order || item.price_at_sale || 0),
+        total: Number((item.qty || item.quantity || 1) * Number(item.price_at_order || item.price_at_sale || 0)),
+        // Informações do pedido para referência
+        order_id: o.id,
+        order_table_number: o.table_number,
+        order_seat_number: o.seat_number
+      }))
+      
+      console.log('🛒 Itens preparados para PDV:', JSON.stringify(orderItems, null, 2))
+      
+      // Salvar no sessionStorage para o PDV recuperar
+      sessionStorage.setItem('pdv_order_items', JSON.stringify(orderItems))
+      sessionStorage.setItem('pdv_order_info', JSON.stringify({
+        order_id: o.id,
+        table_number: o.table_number,
+        seat_number: o.seat_number,
+        status: o.status
+      }))
+      
+      console.log('💾 Itens salvos no sessionStorage')
+      console.log('🚀 Redirecionando para /pos...')
+      
+      // Redirecionar para PDV
+      window.location.href = '/pos'
+      
+    } catch (error) {
+      console.error('❌ Erro ao preparar redirecionamento para PDV:', error)
+      toast.error('Erro ao redirecionar para PDV: ' + error.message)
+    }
     
     // Não abrir mais o modal
     // setTargetOrder(o)

@@ -651,28 +651,36 @@ async function loadInitial() {
 
   // 🛒 CARREGAR ITENS DO PEDIDO (VINDO DA PÁGINA DE PEDIDOS)
   useEffect(() => {
+    console.log('🔍 PDV: Verificando itens do pedido no sessionStorage...')
+    
     // Verificar se há itens do pedido no sessionStorage
     const orderItems = sessionStorage.getItem('pdv_order_items')
     const orderInfo = sessionStorage.getItem('pdv_order_info')
+    
+    console.log('📦 orderItems encontrado:', !!orderItems)
+    console.log('📋 orderInfo encontrado:', !!orderInfo)
     
     if (orderItems && orderInfo) {
       try {
         const items = JSON.parse(orderItems)
         const info = JSON.parse(orderInfo)
         
-        console.log('🛒 Carregando itens do pedido no PDV:', items)
-        console.log('📋 Informações do pedido:', info)
+        console.log('🛒 PDV: Carregando itens do pedido:', items)
+        console.log('📋 PDV: Informações do pedido:', info)
         
         // Preencher informações da mesa/cliente
         if (info.table_number) {
+          console.log('🪑 Definindo número da mesa:', info.table_number)
           setTableNumber(String(info.table_number))
         }
         if (info.seat_number) {
+          console.log('💺 Definindo número do cliente:', info.seat_number)
           setSeatNumber(String(info.seat_number))
         }
         
         // Mudar para o canal de vendas de mesa se for pedido de mesa
         if (isRestaurant && info.table_number) {
+          console.log('🍽️ Mudando para canal de mesa')
           setSaleChannel('table')
         }
         
@@ -692,6 +700,7 @@ async function loadInitial() {
           }
         })
         
+        console.log('🛒 Carrinho preparado:', newCart)
         setCart(newCart)
         
         // Mostrar notificação
@@ -701,14 +710,18 @@ async function loadInitial() {
         sessionStorage.removeItem('pdv_order_items')
         sessionStorage.removeItem('pdv_order_info')
         
+        console.log('✅ Itens do pedido carregados com sucesso!')
+        
       } catch (error) {
         console.error('❌ Erro ao carregar itens do pedido:', error)
-        toast.error('Erro ao carregar itens do pedido')
+        toast.error('Erro ao carregar itens do pedido: ' + error.message)
         
         // Limpar sessionStorage em caso de erro
         sessionStorage.removeItem('pdv_order_items')
         sessionStorage.removeItem('pdv_order_info')
       }
+    } else {
+      console.log('ℹ️ Nenhum item do pedido encontrado para carregar')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Executar apenas uma vez ao carregar a página
