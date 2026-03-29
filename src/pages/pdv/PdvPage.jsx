@@ -1230,72 +1230,23 @@ async function loadInitial() {
   // Função para imprimir recibo após venda no PDV
   async function printReceiptAfterSale(directData = null) {
     try {
-      if (printConfirmType === 'pedido' || directData) {
-        // Preparar dados do pedido para ticket de cozinha
-        const orderData = {
-          order: {
-            table_number: directData?.table_number || tableNumber,
-            seat_number: directData?.seat_number || seatNumber,
-          },
-          items: directData?.items || cartLines.map(line => ({
-            product_id: line.product.id,
-            product_name: line.product.name,
-            qty: line.qty,
-            notes: line.notes || ''
-          })),
-          company: {
-            name: companies?.[0]?.name || 'ERPCRM'
-          }
-        };
-        
-        const result = await thermalPrinter.printKitchenTicket(orderData);
-        if (result.success) {
-          toast.success('Ticket de cozinha enviado!');
-        } else {
-          toast.error(`Falha ao imprimir ticket de cozinha: ${result.error}`);
-        }
-        return;
-      }
+      const orderToPrint = directData || {
+        id: 'REC-' + Date.now(),
+        table_number: tableNumber,
+        seat_number: seatNumber,
+        items: cartLines.map(line => ({
+          product_id: line.product.id,
+          product_name: line.product.name,
+          qty: line.qty,
+          price_at_order: Number(line.product.price || 0)
+        }))
+      };
 
-      // Dados comuns para recibo de venda ou dívida
-      const saleData = {
-        sale: {
-          id: 'REC-' + Date.now(),
-          created_at: new Date().toISOString(),
-          subtotal: cartLines.reduce((sum, item) => sum + (item.qty * Number(item.product.price || 0)), 0),
-          discount: Number(discount || 0),
-          total: finalTotal,
-          payment_method: paymentMethod
-        },
-        items: cartLines.map(item => ({
-          name: item.product.name,
-          quantity: item.qty,
-          price_at_sale: Number(item.product.price || 0),
-          total: item.qty * Number(item.product.price || 0)
-        })),
-        company: {
-          name: companies?.[0]?.name || 'ERPCRM - Sistema de Gestão',
-          address: companies?.[0]?.address || '',
-          phone: companies?.[0]?.phone || '',
-          document: companies?.[0]?.nuit ? `NUIT: ${companies[0].nuit}` : ''
-        },
-        customer: selectedCustomerId ? { name: customers?.find(c => String(c.id) === String(selectedCustomerId))?.name } : null,
-        payment: {
-          method: paymentMethod,
-          amount_paid: paymentMethod === 'cash' ? effectivePaidNum : finalTotal,
-          change: paymentMethod === 'cash' ? (effectivePaidNum - finalTotal) : 0
-        }
-      }
-
-      const result = await thermalPrinter.printReceipt(saleData)
-      
-      if (result.success) {
-        toast.success('Recibo impresso com sucesso!')
-      } else {
-        toast.error(`Falha na impressão: ${result.error}`)
-      }
+      await printOrderReceipt(orderToPrint, branch);
+      toast.success('Comprovante enviado para a impressora!');
     } catch (error) {
-      toast.error(`Erro ao imprimir: ${error.message}`)
+      console.error('Erro na impressão QZ Tray:', error);
+      toast.error(`Falha na impressão: ${error.message}`);
     }
   }
 

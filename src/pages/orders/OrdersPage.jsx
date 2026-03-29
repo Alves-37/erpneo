@@ -700,71 +700,12 @@ export default function OrdersPage() {
   // Função para imprimir recibo após finalizar pedido
   async function printReceiptAfterOrder(order) {
     try {
-      // Se o pedido ainda está aberto ou em progresso, imprime ticket de cozinha
-      if (order.status === 'open' || order.status === 'in_progress') {
-        const orderData = {
-          order: {
-            table_number: order.table_number,
-            seat_number: order.seat_number,
-          },
-          items: order.items?.map(item => ({
-            product_id: item.product_id,
-            product_name: item.product_name,
-            qty: item.qty,
-            notes: item.notes || ''
-          })) || [],
-          company: {
-            name: companies?.[0]?.name || 'ERPCRM'
-          }
-        };
-
-        const result = await thermalPrinter.printKitchenTicket(orderData);
-        if (result.success) {
-          toast.success('Ticket de cozinha enviado!');
-        } else {
-          toast.error(`Falha ao imprimir ticket de cozinha: ${result.error}`);
-        }
-        return;
-      }
-
-      // Caso contrário (pedido fechado), imprime o recibo do cliente
-      const saleData = {
-        sale: {
-          id: `REC-PED-${order.id}`,
-          created_at: new Date().toISOString(),
-          subtotal: order.items?.reduce((sum, item) => sum + (item.qty * Number(item.price_at_order || 0)), 0) || 0,
-          discount: 0,
-          total: order.total || order.items?.reduce((sum, item) => sum + (item.qty * Number(item.price_at_order || 0)), 0) || 0,
-          payment_method: order.payment_method || 'Dinheiro'
-        },
-        items: order.items?.map(item => ({
-          name: item.product_name || `Produto #${item.product_id}`,
-          quantity: item.qty,
-          price_at_sale: Number(item.price_at_order || 0),
-          total: item.qty * Number(item.price_at_order || 0)
-        })) || [],
-        company: {
-          name: companies?.[0]?.name || 'ERPCRM - Sistema de Gestão',
-          address: companies?.[0]?.address || '',
-          phone: companies?.[0]?.phone || '',
-          document: companies?.[0]?.nuit ? `NUIT: ${companies[0].nuit}` : ''
-        },
-        customer: order.customer_name ? { name: order.customer_name } : null,
-        payment: {
-          method: order.payment_method || 'cash',
-          amount_paid: order.paid || 0,
-          change: order.change || 0
-        }
-      }
-
-      const result = await thermalPrinter.printReceipt(saleData);
-      if (result.success) {
-        toast.success('Recibo do cliente impresso!');
-      } else {
-        toast.error(`Falha na impressão: ${result.error}`);
-      }
+      const branch = await getMyBranch();
+      await printOrderReceipt(order, branch);
+      toast.success('Comprovante enviado para a impressora!');
     } catch (error) {
-      toast.error(`Erro ao imprimir: ${error.message}`);
+      console.error('Erro na impressão QZ Tray:', error);
+      toast.error(`Falha na impressão: ${error.message}`);
     }
   }
 
