@@ -8,6 +8,7 @@ import { changePassword, updateMe } from '../../api/me.js'
 import { toast } from '../../services/toast.js'
 import { useAuthStore } from '../../store/authStore.js'
 import { thermalPrinter } from '../../utils/thermalPrinter.js'
+import { printOrderReceipt } from '../../services/qzService.js'
 
 function Modal({ open, title, children, onClose }) {
   if (!open) return null
@@ -429,95 +430,61 @@ export default function SettingsPage() {
   async function testPrinter() {
     setTestingPrinter(true)
     try {
-      // Dados de teste
-      const testData = {
-        sale: {
-          id: 'TEST-001',
-          created_at: new Date().toISOString(),
-          subtotal: 1230.00,
-          discount: 50.00,
-          total: 1180.00,
-          payment_method: 'cash'
-        },
+      // Dados de teste formatados para o QZ Tray
+      const testOrder = {
+        id: 'TESTE-QZ',
+        table_number: 10,
+        seat_number: 1,
         items: [
-          {
-            name: 'Hambúrguer Simples',
-            quantity: 2,
-            price_at_sale: 120.00,
-            total: 240.00
-          },
-          {
-            name: 'Refrigerante Lata',
-            quantity: 3,
-            price_at_sale: 45.00,
-            total: 135.00
-          },
-          {
-            name: 'Batata Frita',
-            quantity: 1,
-            price_at_sale: 80.00,
-            total: 80.00
-          },
-          {
-            name: 'Suco Natural',
-            quantity: 2,
-            price_at_sale: 60.00,
-            total: 120.00
-          },
-          {
-            name: 'Salada Caesar',
-            quantity: 1,
-            price_at_sale: 150.00,
-            total: 150.00
-          },
-          {
-            name: 'Sopa do Dia',
-            quantity: 2,
-            price_at_sale: 75.00,
-            total: 150.00
-          },
-          {
-            name: 'Pizza Fatia',
-            quantity: 1,
-            price_at_sale: 100.00,
-            total: 100.00
-          },
-          {
-            name: 'Sorvete',
-            quantity: 1,
-            price_at_sale: 65.00,
-            total: 65.00
-          },
-          {
-            name: 'Café Expresso',
-            quantity: 3,
-            price_at_sale: 40.00,
-            total: 120.00
-          },
-          {
-            name: 'Pastel de Nata',
-            quantity: 2,
-            price_at_sale: 35.00,
-            total: 70.00
-          }
-        ],
-        company: printerConfig.companyInfo,
-        customer: {
-          name: 'Cliente Teste'
-        },
-        payment: {
-          method: 'cash',
-          amount_paid: 1200.00,
-          change: 20.00
-        }
-      }
+          { product_name: 'Produto de Teste 1', qty: 2, price_at_order: 150.00 },
+          { product_name: 'Produto de Teste 2', qty: 1, price_at_order: 50.00 }
+        ]
+      };
 
-      const result = await thermalPrinter.printReceipt(testData)
-      
-      if (result.success) {
-        toast.success('Teste de impressão realizado com sucesso!')
-      } else {
-        toast.error(`Falha no teste: ${result.error}`)
+      try {
+        await printOrderReceipt(testOrder, branch);
+        toast.success('Teste QZ enviado com sucesso!');
+      } catch (qzErr) {
+        if (qzErr.message === 'OFFLINE') {
+          // Fallback para o teste antigo se o QZ estiver offline
+          const testData = {
+            sale: {
+              id: 'TEST-001',
+              created_at: new Date().toISOString(),
+              subtotal: 1230.00,
+              discount: 50.00,
+              total: 1180.00,
+              payment_method: 'cash'
+            },
+            items: [
+              {
+                name: 'Hambúrguer Simples',
+                quantity: 2,
+                price_at_sale: 120.00,
+                total: 240.00
+              },
+              {
+                name: 'Refrigerante Lata',
+                quantity: 3,
+                price_at_sale: 45.00,
+                total: 135.00
+              }
+            ],
+            company: {
+              name: company?.name || 'Empresa de Teste',
+              address: company?.address || '',
+              phone: company?.phone || ''
+            }
+          };
+          const result = await thermalPrinter.printReceipt(testData);
+          if (result.success) {
+            toast.success('Teste via navegador iniciado (QZ Offline).');
+          } else {
+            throw new Error(result.error);
+          }
+        } else {
+          throw qzErr;
+        }
       }
     } catch (error) {
       toast.error(`Erro no teste: ${error.message}`)
