@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { listCompanies } from '../../api/companies.js'
 import { getMyBranch } from '../../api/branches.js'
 import { issueFiscalDocumentFromSale } from '../../api/fiscalDocuments.js'
-import { listOrders } from '../../api/orders.js'
+import { listOrders, updateOrder } from '../../api/orders.js'
 import { listProductCategories } from '../../api/productCategories.js'
 import { listProductImages, listProducts } from '../../api/products.js'
 import { createOrder } from '../../api/orders.js'
@@ -649,6 +649,70 @@ async function loadInitial() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart])
 
+  // 🛒 CARREGAR ITENS DO PEDIDO (VINDO DA PÁGINA DE PEDIDOS)
+  useEffect(() => {
+    // Verificar se há itens do pedido no sessionStorage
+    const orderItems = sessionStorage.getItem('pdv_order_items')
+    const orderInfo = sessionStorage.getItem('pdv_order_info')
+    
+    if (orderItems && orderInfo) {
+      try {
+        const items = JSON.parse(orderItems)
+        const info = JSON.parse(orderInfo)
+        
+        console.log('🛒 Carregando itens do pedido no PDV:', items)
+        console.log('📋 Informações do pedido:', info)
+        
+        // Preencher informações da mesa/cliente
+        if (info.table_number) {
+          setTableNumber(String(info.table_number))
+        }
+        if (info.seat_number) {
+          setSeatNumber(String(info.seat_number))
+        }
+        
+        // Mudar para o canal de vendas de mesa se for pedido de mesa
+        if (isRestaurant && info.table_number) {
+          setSaleChannel('table')
+        }
+        
+        // Carregar itens no carrinho
+        const newCart = {}
+        items.forEach(item => {
+          const key = String(item.product_id)
+          newCart[key] = {
+            product_id: item.product_id,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.total,
+            order_id: item.order_id, // Guardar referência do pedido
+            order_table_number: item.order_table_number,
+            order_seat_number: item.order_seat_number
+          }
+        })
+        
+        setCart(newCart)
+        
+        // Mostrar notificação
+        toast.success(`Carregados ${items.length} itens do pedido #${info.order_id}`)
+        
+        // Limpar sessionStorage após carregar
+        sessionStorage.removeItem('pdv_order_items')
+        sessionStorage.removeItem('pdv_order_info')
+        
+      } catch (error) {
+        console.error('❌ Erro ao carregar itens do pedido:', error)
+        toast.error('Erro ao carregar itens do pedido')
+        
+        // Limpar sessionStorage em caso de erro
+        sessionStorage.removeItem('pdv_order_items')
+        sessionStorage.removeItem('pdv_order_info')
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Executar apenas uma vez ao carregar a página
+
   useEffect(() => {
     if (!isRestaurant) return
 
@@ -941,32 +1005,74 @@ async function loadInitial() {
         return
       }
 
+      // 🛒 VERIFICAR SE HÁ UM PEDIDO EXISTENTE ASSOCIADO
+      const firstCartItem = cartLines[0]
+      const existingOrderId = firstCartItem?.order_id
+
       if (isRestaurant && normalizedChannel === 'table') {
-        await createOrder({
-          table_number: tableNum,
-          seat_number: seatNum,
-          items: cartLines.map((l) => ({
-            product_id: l.product.id,
-            qty: l.qty,
-            price_at_order: Number(l.product.price || 0),
-            cost_at_order: Number(l.product.cost || 0),
-          })),
-        })
-        toast.success('Pedido enviado com sucesso.')
-        
-          // Perguntar se deseja imprimir o comprovante do pedido (Cozinha)
-        setTimeout(() => {
-          showPrintConfirm('pedido', () => printReceiptAfterSale({
+        if (existingOrderId) {
+          // 🔄 ATUALIZAR PEDIDO EXISTENTE em vez de criar novo
+          console.log('🔄 Atualizando pedido existente:', existingOrderId)
+          
+          await updateOrder(existingOrderId, {
             table_number: tableNum,
             seat_number: seatNum,
-            items: cartLines.map(l => ({
+            items: cartLines.map((l) => ({
               product_id: l.product.id,
-              product_name: l.product.name,
               qty: l.qty,
-              notes: l.notes || ''
+              price_at_order: Number(l.product.price || 0),
+              cost_at_order: Number(l.product.cost || 0),
+            })),
+          })
+          
+          toast.success('Pedido atualizado com sucesso!')
+          
+          // Perguntar se deseja imprimir o comprovante do pedido atualizado (Cozinha)
+          setTimeout(() => {
+            showPrintConfirm('pedido', () => printReceiptAfterSale({
+              table_number: tableNum,
+              seat_number: seatNum,
+              items: cartLines.map(l => ({
+                product_id: l.product.id,
+                product_name: l.product.name,
+                qty: l.qty,
+                notes: l.notes || ''
+              })),
+              order_id: existingOrderId // Incluir ID do pedido na impressão
             }))
-          }))
-        }, 500)
+          }, 500)
+          
+          // 🔄 Limpar carrinho após atualizar pedido
+          clearCart()
+          
+        } else {
+          // 🆕 CRIAR NOVO PEDIDO (comportamento original)
+          await createOrder({
+            table_number: tableNum,
+            seat_number: seatNum,
+            items: cartLines.map((l) => ({
+              product_id: l.product.id,
+              qty: l.qty,
+              price_at_order: Number(l.product.price || 0),
+              cost_at_order: Number(l.product.cost || 0),
+            })),
+          })
+          toast.success('Pedido criado com sucesso.')
+          
+          // Perguntar se deseja imprimir o comprovante do pedido (Cozinha)
+          setTimeout(() => {
+            showPrintConfirm('pedido', () => printReceiptAfterSale({
+              table_number: tableNum,
+              seat_number: seatNum,
+              items: cartLines.map(l => ({
+                product_id: l.product.id,
+                product_name: l.product.name,
+                qty: l.qty,
+                notes: l.notes || ''
+              }))
+            }))
+          }, 500)
+        }
 
         setTableNumber('')
         setSeatNumber('1')

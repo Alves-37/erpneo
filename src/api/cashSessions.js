@@ -23,6 +23,11 @@ export async function getCashSessionSummary(cashSessionId) {
   return res.data
 }
 
+export async function getCashSessionItems(cashSessionId) {
+  const res = await apiClient.get(`/cash-sessions/${cashSessionId}/items`)
+  return res.data
+}
+
 export async function downloadCashSessionClosePdf(cashSessionId) {
   const res = await apiClient.get(`/cash-sessions/${cashSessionId}/close-pdf`, {
     responseType: 'blob',

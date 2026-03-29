@@ -123,19 +123,39 @@ export default function OrdersPage() {
   }
 
   function openAddItemsModal(o) {
-    setTargetOrder(o)
-    // Copiar itens existentes para edição
-    // No backend, a atualização substitui a lista de itens, então enviamos a lista completa
-    const existingItems = (o.items || []).map(item => ({
+    // 🛒 REDIRECIONAR PARA PDV em vez de abrir modal
+    console.log('Redirecionando para PDV com itens do pedido:', o.id)
+    console.log('Itens atuais do pedido:', JSON.stringify(o.items, null, 2))
+    
+    // Preparar itens para o carrinho do PDV
+    const orderItems = (o.items || []).map(item => ({
       product_id: item.product_id,
-      qty: item.qty,
-      price_at_order: Number(item.price_at_order || 0),
-      cost_at_order: Number(item.cost_at_order || 0),
-      line_total: Number(item.qty || 0) * Number(item.price_at_order || 0)
-      // Removido o item.id para evitar confusão no backend na substituição
+      product_name: item.product_name || `Produto #${item.product_id}`,
+      quantity: item.qty || item.quantity || 1,
+      unit_price: Number(item.price_at_order || item.price_at_sale || 0),
+      total: Number((item.qty || item.quantity || 1) * Number(item.price_at_order || item.price_at_sale || 0)),
+      // Informações do pedido para referência
+      order_id: o.id,
+      order_table_number: o.table_number,
+      order_seat_number: o.seat_number
     }))
-    setAddOrderItems(existingItems)
-    setOpenAddItems(true)
+    
+    // Salvar no sessionStorage para o PDV recuperar
+    sessionStorage.setItem('pdv_order_items', JSON.stringify(orderItems))
+    sessionStorage.setItem('pdv_order_info', JSON.stringify({
+      order_id: o.id,
+      table_number: o.table_number,
+      seat_number: o.seat_number,
+      status: o.status
+    }))
+    
+    // Redirecionar para PDV
+    window.location.href = '/pos'
+    
+    // Não abrir mais o modal
+    // setTargetOrder(o)
+    // setAddOrderItems(existingItems)
+    // setOpenAddItems(true)
   }
 
   const productById = useMemo(() => {
@@ -151,6 +171,7 @@ export default function OrdersPage() {
       
       // CONFIAR 100% NO BACKEND - Sem mais locks ou localStorage
       // O backend deve ser a fonte da verdade sempre
+      console.log('Dados brutos do backend:', JSON.stringify(data, null, 2))
       setRows(data || [])
       console.log('Carregados pedidos do backend:', data?.length || 0, 'pedidos')
       
@@ -484,22 +505,17 @@ export default function OrdersPage() {
   async function doUpdateOrder() {
     if (!targetOrder) return;
     
-    // Permitir lista vazia de itens se o usuário removeu todos (o backend deve tratar)
     setAddItemsLoading(true)
     try {
-      // Log para depuração
       console.log('Atualizando pedido:', targetOrder.id);
       
       // Mapear itens para o formato que o backend espera
-      // IMPORTANTE: Garantir que os campos correspondam ao esperado pelo model OrderUpdate
       const payload = {
         table_number: Number(targetOrder.table_number),
         seat_number: Number(targetOrder.seat_number),
         items: addOrderItems.map(item => ({
           product_id: Number(item.product_id),
           qty: Number(item.qty),
-          // Enviamos apenas product_id e qty para deixar o backend gerir preços e custos se necessário,
-          // ou enviamos tudo se o backend exigir.
           price_at_order: Number(item.price_at_order || 0),
           cost_at_order: Number(item.cost_at_order || 0)
         }))
@@ -507,34 +523,75 @@ export default function OrdersPage() {
 
       console.log('Payload enviado para updateOrder (JSON):', JSON.stringify(payload, null, 2));
 
-      // Guardar uma cópia dos itens para o ticket de cozinha antes de limpar
+      // TENTAR ATUALIZAR PRIMEIRO (pode funcionar se o backend for parcialmente compatível)
+      let response = null;
+      let updateWorked = false;
+      
+      try {
+        response = await updateOrder(targetOrder.id, payload);
+        console.log('Resposta COMPLETA do servidor (updateOrder):', JSON.stringify(response, null, 2));
+        updateWorked = true;
+      } catch (updateError) {
+        console.log('Update falhou, tentando abordagem alternativa:', updateError.message);
+        
+        // ABORDAGEM ALTERNATIVA: Criar novo pedido e substituir
+        try {
+          const createPayload = {
+            table_number: Number(targetOrder.table_number),
+            seat_number: Number(targetOrder.seat_number),
+            items: payload.items
+          };
+          
+          console.log('Tentando criar novo pedido como alternativa:', JSON.stringify(createPayload, null, 2));
+          const newOrder = await createOrder(createPayload);
+          console.log('Novo pedido criado:', newOrder);
+          
+          response = newOrder;
+          updateWorked = true;
+          
+          toast.success('Pedido atualizado (criado novo pedido)!')
+        } catch (createError) {
+          console.error('Ambas abordagens falharam:', createError);
+          throw createError;
+        }
+      }
+      
+      // Verificar se a resposta contém os itens atualizados
+      if (response && response.items) {
+        console.log('Itens na resposta do backend:', response.items.length);
+        console.log('Itens esperados:', payload.items.length);
+        
+        if (response.items.length !== payload.items.length) {
+          console.error('⚠️ BACKEND NÃO SALVOU TODOS OS ITENS!');
+          console.error('Enviados:', payload.items.length, 'Recebidos:', response.items.length);
+          toast.error('Erro: Backend não salvou todos os itens. Contate o suporte.')
+        } else {
+          if (updateWorked) {
+            toast.success('Pedido atualizado com sucesso!')
+          }
+        }
+      } else {
+        if (updateWorked) {
+          toast.success('Pedido atualizado com sucesso!')
+        }
+      }
+      
+      // Guardar itens para impressão
       const itemsForKitchen = [...addOrderItems];
       const orderInfoForKitchen = { ...targetOrder };
-
-      const response = await updateOrder(targetOrder.id, payload)
-      console.log('Resposta do servidor (updateOrder):', response);
       
-      toast.success('Pedido atualizado com sucesso!')
-      
-      // Perguntar se deseja imprimir após 500ms
-      setTimeout(() => {
-        showPrintConfirm(() => printReceiptAfterOrder({
-          ...orderInfoForKitchen,
-          items: itemsForKitchen,
-          status: 'in_progress'
-        }))
-      }, 500);
+      // NÃO perguntar sobre impressão ao atualizar pedido
+      // Apenas ao finalizar pedido deve perguntar
       
       // Resetar formulário
       setOpenAddItems(false)
       setTargetOrder(null)
       setAddOrderItems([])
       
-      // Recarregar dados UMA VEZ apenas - confiar no backend
-      console.log('Recarregando dados do backend...');
-      setTimeout(async () => {
-        await load();
-      }, 500);
+      // Forçar recarga imediata para garantir dados atualizados
+      console.log('Recarregando dados do backend imediatamente...');
+      await load();
+      
     } catch (err) {
       console.error('Erro ao atualizar pedido:', err);
       toast.error(err?.response?.data?.detail || 'Não foi possível atualizar o pedido.')

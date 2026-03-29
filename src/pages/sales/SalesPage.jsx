@@ -6,7 +6,7 @@ import { getDashboardSummary } from '../../api/dashboard.js'
 import { listEstablishments } from '../../api/establishments.js'
 import { issueFiscalDocumentFromSale, listFiscalDocumentsBySaleId } from '../../api/fiscalDocuments.js'
 import { listSales } from '../../api/sales.js'
-import { closeCashSession, downloadCashSessionClosePdf, getCurrentCashSession, getCashSessionSummary, openCashSession } from '../../api/cashSessions.js'
+import { closeCashSession, downloadCashSessionClosePdf, getCurrentCashSession, getCashSessionSummary, getCashSessionItems } from '../../api/cashSessions.js'
 import { createExpense, payExpense } from '../../api/expenses.js'
 import { listExpenseCategories } from '../../api/expenseCategories.js'
 import { useAuthStore } from '../../store/authStore.js'
@@ -105,6 +105,7 @@ export default function SalesPage() {
   const [cashClosingCounted, setCashClosingCounted] = useState('')
   const [cashClosingNotes, setCashClosingNotes] = useState('')
   const [cashSummary, setCashSummary] = useState(null)
+  const [cashItems, setCashItems] = useState([]) // NOVO: itens vendidos na sessão
 
   const [expenseCategories, setExpenseCategories] = useState([])
   const [openExpenseModal, setOpenExpenseModal] = useState(false)
@@ -149,7 +150,7 @@ export default function SalesPage() {
           limit: 100,
           offset: 0,
           establishment_id: isAdmin ? (establishment?.id || undefined) : undefined,
-          status: filterStatus || 'paid', // Por padrão, mostrar apenas pagas (não anuladas)
+          status: filterStatus || 'paid', // Por padrão, mostrar apenas abertas (ativas)
           payment_method: filterPayment || undefined,
           sale_channel: filterChannel || undefined,
           date_from: filterDateFrom ? new Date(filterDateFrom).toISOString() : undefined,
@@ -378,33 +379,49 @@ export default function SalesPage() {
           <div className="mt-1 text-sm text-slate-300">Histórico e resumo</div>
         </div>
         <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
-          <button
-            type="button"
-            disabled={cashLoading}
-            onClick={async () => {
-              const cs = await refreshCashSession()
-              if (cs?.id) {
-                try {
-                  const s = await getCashSessionSummary(Number(cs.id))
-                  setCashSummary(s || null)
-                  // Pré-preencher valor contado com o esperado
-                  setCashClosingCounted(String(s?.expected_cash || 0))
-                } catch {
-                  setCashSummary(null)
-                  setCashClosingCounted('0')
+          {/* BOTÃO ABRIR/FECHAR CAIXA - APENAS ADMIN */}
+          {isAdmin && (
+            <button
+              type="button"
+              disabled={cashLoading}
+              onClick={async () => {
+                const cs = await refreshCashSession()
+                if (cs?.id) {
+                  try {
+                    // Carregar resumo financeiro
+                    const s = await getCashSessionSummary(Number(cs.id))
+                    setCashSummary(s || null)
+                    
+                    // Carregar itens vendidos (com fallback)
+                    try {
+                      const items = await getCashSessionItems(Number(cs.id))
+                      setCashItems(items || [])
+                    } catch (itemsError) {
+                      console.log('Endpoint de itens ainda não disponível no backend:', itemsError.message)
+                      setCashItems([]) // Define como array vazio para não quebrar a UI
+                    }
+                    
+                    // Pré-preencher valor contado com o esperado
+                    setCashClosingCounted(String(s?.expected_cash || 0))
+                  } catch (error) {
+                    console.error('Erro ao carregar dados do caixa:', error)
+                    setCashSummary(null)
+                    setCashItems([])
+                    setCashClosingCounted('0')
+                  }
+                  setCashClosingNotes('')
+                  setOpenCashClose(true)
+                } else {
+                  setCashOpeningBalance('')
+                  setOpenCashOpen(true)
                 }
-                setCashClosingNotes('')
-                setOpenCashClose(true)
-              } else {
-                setCashOpeningBalance('')
-                setOpenCashOpen(true)
-              }
-            }}
-            className={`w-full sm:w-auto rounded-xl border ${cashSession?.id ? 'border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50 text-emerald-200' : 'border-amber-900/60 bg-amber-950/30 hover:bg-amber-950/50 text-amber-200'} px-4 py-2.5 text-sm font-semibold disabled:opacity-60`}
-            title={cashSession?.id ? 'Caixa aberto' : 'Caixa fechado'}
-          >
-            {cashSession?.id ? 'Fechar caixa' : 'Abrir caixa'}
-          </button>
+              }}
+              className={`w-full sm:w-auto rounded-xl border ${cashSession?.id ? 'border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50 text-emerald-200' : 'border-amber-900/60 bg-amber-950/30 hover:bg-amber-950/50 text-amber-200'} px-4 py-2.5 text-sm font-semibold disabled:opacity-60`}
+              title={cashSession?.id ? 'Caixa aberto - Apenas administradores podem fechar' : 'Caixa fechado - Apenas administradores podem abrir'}
+            >
+              {cashSession?.id ? 'Fechar caixa' : 'Abrir caixa'}
+            </button>
+          )}
 
           <button
             type="button"
@@ -445,11 +462,12 @@ export default function SalesPage() {
               }}
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
             >
-              <option value="paid">Pagas (Ativas)</option>
-              <option value="">Todas (incluindo anuladas)</option>
-              <option value="completed">Concluída</option>
-              <option value="pending">Pendente</option>
-              <option value="void">Anulada</option>
+              <option value="paid">Abertas (Ativas)</option>
+              <option value="closed">Fechadas</option>
+              <option value="">Todas</option>
+              <option value="completed">Concluídas</option>
+              <option value="pending">Pendentes</option>
+              <option value="void">Anuladas</option>
             </select>
           </div>
           <div>
@@ -616,6 +634,7 @@ export default function SalesPage() {
                   <th className="px-5 py-3 text-left font-semibold">Ponto</th>
                   <th className="px-5 py-3 text-left font-semibold">Data</th>
                   <th className="px-5 py-3 text-left font-semibold">Tipo</th>
+                  <th className="px-5 py-3 text-left font-semibold">Estado</th>
                   {isRestaurant ? <th className="px-5 py-3 text-left font-semibold">Mesa</th> : null}
                   <th className="px-5 py-3 text-left font-semibold">Pagamento</th>
                   <th className="px-5 py-3 text-right font-semibold">Total</th>
@@ -644,6 +663,25 @@ export default function SalesPage() {
                         {saleChannelLabel[(s?.sale_channel || '').toLowerCase()] || (s?.sale_channel || '-')}
                       </span>
                     </td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                          s?.status === 'closed' 
+                            ? 'border-red-500/30 bg-red-500/10 text-red-400' 
+                            : s?.status === 'paid'
+                            ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                            : s?.status === 'void'
+                            ? 'border-orange-500/30 bg-orange-500/10 text-orange-400'
+                            : 'border-blue-500/30 bg-blue-500/10 text-blue-400'
+                        }`}
+                      >
+                        {s?.status === 'paid' ? 'Aberta' : 
+                         s?.status === 'closed' ? 'Fechada' : 
+                         s?.status === 'void' ? 'Anulada' : 
+                         s?.status === 'pending' ? 'Pendente' : 
+                         s?.status || '-'}
+                      </span>
+                    </td>
                     {isRestaurant ? (
                       <td className="px-5 py-3 text-slate-200">
                         {(s?.sale_channel || '').toLowerCase() === 'table' ? `Mesa ${s?.table_number ?? '-'} · ${s?.seat_number ?? '-'}` : '-'}
@@ -656,7 +694,7 @@ export default function SalesPage() {
 
                 {!loading && (!sales || sales.length === 0) && (
                   <tr>
-                    <td className="px-5 py-6 text-center text-slate-400" colSpan={isRestaurant ? 8 : 7}>
+                    <td className="px-5 py-6 text-center text-slate-400" colSpan={isRestaurant ? 9 : 8}>
                       Sem vendas para mostrar
                     </td>
                   </tr>
@@ -1165,102 +1203,308 @@ export default function SalesPage() {
 
       <Modal
         open={openCashClose}
-        title="Fechar caixa"
+        title="Fechar caixa - Resumo completo para administrador"
         onClose={() => {
           if (!cashLoading) setOpenCashClose(false)
         }}
       >
         <div className="grid gap-4">
+          {/* INFORMAÇÕES DA SESSÃO */}
+          {cashSession && (
+            <div className="rounded-2xl border border-blue-900/60 bg-blue-950/30 p-4">
+              <div className="text-sm font-semibold text-blue-200 mb-3">📋 Informações da sessão</div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-blue-300/70 text-xs">Aberto por</div>
+                  <div className="text-blue-100 font-medium">{cashSession.opened_by_name || 'ID: ' + cashSession.opened_by}</div>
+                </div>
+                <div>
+                  <div className="text-blue-300/70 text-xs">Abertura</div>
+                  <div className="text-blue-100 font-medium">
+                    {cashSession.opened_at ? new Date(cashSession.opened_at).toLocaleString('pt-MZ') : 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-blue-300/70 text-xs">Saldo inicial</div>
+                  <div className="text-blue-100 font-medium">{Number(cashSession.opening_balance || 0).toFixed(2)} MZN</div>
+                </div>
+                <div>
+                  <div className="text-blue-300/70 text-xs">Status</div>
+                  <div className="text-blue-100 font-medium capitalize">{cashSession.status || 'open'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* RESUMO DE VENDAS DETALHADO */}
           {cashSummary ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-sm">
-              <div className="flex items-center justify-between text-slate-300">
-                <div>Total de vendas (todos os métodos)</div>
-                <div className="font-semibold text-white">{Number(cashSummary.total_sales_all_methods || 0).toFixed(2)} MZN</div>
-              </div>
-              <div className="mt-2 flex items-center justify-between text-slate-300">
-                <div>Esperado (dinheiro)</div>
-                <div className="font-semibold text-white">{Number(cashSummary.expected_cash || 0).toFixed(2)} MZN</div>
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                <div className="text-slate-400">Vendas (dinheiro)</div>
-                <div className="text-right text-slate-200">{Number(cashSummary.cash_sales_total || 0).toFixed(2)} MZN</div>
-                <div className="text-slate-400">Despesas (dinheiro)</div>
-                <div className="text-right text-slate-200">{Number(cashSummary.cash_expenses_total || 0).toFixed(2)} MZN</div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div className="text-sm font-semibold text-slate-200 mb-3">💰 Resumo de vendas detalhado</div>
+              
+              {/* TOTAIS */}
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center justify-between text-slate-300">
+                  <div>Total de vendas (todos os métodos)</div>
+                  <div className="font-bold text-white text-lg">{Number(cashSummary.total_sales_all_methods || 0).toFixed(2)} MZN</div>
+                </div>
+                
+                {/* BREAKDOWN POR MÉTODO DE PAGAMENTO */}
+                <div className="mt-3 p-3 bg-slate-900 rounded-xl">
+                  <div className="text-xs font-semibold text-slate-400 mb-2">Vendas por método de pagamento</div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">💵 Dinheiro</span>
+                      <span className="text-green-400 font-medium">{Number(cashSummary.cash_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">💳 MPESA</span>
+                      <span className="text-green-400 font-medium">{Number(cashSummary.mpesa_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">🏦 Transferência</span>
+                      <span className="text-green-400 font-medium">{Number(cashSummary.transfer_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">💳 Cartão</span>
+                      <span className="text-green-400 font-medium">{Number(cashSummary.card_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">📝 Outros</span>
+                      <span className="text-green-400 font-medium">{Number(cashSummary.other_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FLUXO DE DINHEIRO */}
+                <div className="mt-3 p-3 bg-slate-900 rounded-xl">
+                  <div className="text-xs font-semibold text-slate-400 mb-2">💰 Fluxo de Caixa</div>
+                  
+                  {/* DINHEIRO FÍSICO */}
+                  <div className="mb-3 p-2 bg-slate-800 rounded-lg">
+                    <div className="text-xs font-semibold text-green-400 mb-1">💵 DINHEIRO FÍSICO (Caixa)</div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">Saldo inicial</span>
+                      <span className="text-white">{Number(cashSummary.opening_balance || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">+ Vendas dinheiro</span>
+                      <span className="text-green-400">+{Number(cashSummary.cash_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">- Despesas dinheiro</span>
+                      <span className="text-red-400">-{Number(cashSummary.cash_expenses_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between text-sm font-semibold">
+                      <span className="text-green-400">💰 Esperado em caixa</span>
+                      <span className="text-green-400">{(Number(cashSummary.opening_balance || 0) + Number(cashSummary.cash_sales_total || 0) - Number(cashSummary.cash_expenses_total || 0)).toFixed(2)} MZN</span>
+                    </div>
+                  </div>
+
+                  {/* VALORES ELETRÔNICOS */}
+                  <div className="p-2 bg-slate-800 rounded-lg">
+                    <div className="text-xs font-semibold text-blue-400 mb-1">💳 VALORES ELETRÔNICOS (Contas)</div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">💳 MPESA</span>
+                      <span className="text-blue-400">{Number(cashSummary.mpesa_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">🏦 Transferência</span>
+                      <span className="text-blue-400">{Number(cashSummary.transfer_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">💳 Cartão</span>
+                      <span className="text-blue-400">{Number(cashSummary.card_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-300">� Outros</span>
+                      <span className="text-blue-400">{Number(cashSummary.other_sales_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between text-sm font-semibold">
+                      <span className="text-blue-400">💳 Total eletrônico</span>
+                      <span className="text-blue-400">{(Number(cashSummary.mpesa_sales_total || 0) + Number(cashSummary.transfer_sales_total || 0) + Number(cashSummary.card_sales_total || 0) + Number(cashSummary.other_sales_total || 0)).toFixed(2)} MZN</span>
+                    </div>
+                  </div>
+
+                  {/* RESUMO GERAL */}
+                  <div className="mt-3 p-2 bg-gradient-to-r from-slate-800 to-slate-700 rounded-lg">
+                    <div className="flex justify-between text-sm font-bold">
+                      <span className="text-white">📊 TOTAL GERAL DO DIA</span>
+                      <span className="text-yellow-400">{Number(cashSummary.gross_total || 0).toFixed(2)} MZN</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      * Físico: {(Number(cashSummary.opening_balance || 0) + Number(cashSummary.cash_sales_total || 0) - Number(cashSummary.cash_expenses_total || 0)).toFixed(2)} MZN | 
+                      Eletrônico: {(Number(cashSummary.mpesa_sales_total || 0) + Number(cashSummary.transfer_sales_total || 0) + Number(cashSummary.card_sales_total || 0) + Number(cashSummary.other_sales_total || 0)).toFixed(2)} MZN
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
 
-          <label className="grid gap-2">
-            <div className="text-xs font-semibold text-slate-400">Valor contado</div>
-            <input
-              value={cashClosingCounted}
-              onChange={(e) => setCashClosingCounted(e.target.value)}
-              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
-              inputMode="decimal"
-              placeholder="0.00"
-              type="text"
-            />
-          </label>
+          {/* ITENS VENDIDOS NA SESSÃO */}
+          {cashItems && cashItems.length > 0 && (
+            <div className="rounded-2xl border border-purple-900/60 bg-purple-950/30 p-4">
+              <div className="text-sm font-semibold text-purple-200 mb-3">📦 Itens vendidos na sessão</div>
+              
+              <div className="max-h-64 overflow-y-auto">
+                <div className="space-y-2">
+                  {cashItems.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-purple-900/20 rounded-lg">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-purple-100">
+                          {item.product_name || `Produto #${item.product_id}`}
+                        </div>
+                        <div className="text-xs text-purple-300/70">
+                          {Number(item.unit_price || 0).toFixed(2)} MZN cada
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-purple-100">
+                          {Number(item.quantity || item.qty || 0)}x
+                        </div>
+                        <div className="text-xs text-purple-300/70">
+                          {Number(item.total || (item.quantity * item.unit_price) || 0).toFixed(2)} MZN
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* RESUMO DE ITENS */}
+              <div className="mt-3 pt-3 border-t border-purple-800/50">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-purple-300">Total de itens diferentes:</span>
+                  <span className="font-semibold text-purple-100">{cashItems.length}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm mt-1">
+                  <span className="text-purple-300">Quantidade total vendida:</span>
+                  <span className="font-semibold text-purple-100">
+                    {cashItems.reduce((sum, item) => sum + (Number(item.quantity || item.qty || 0)), 0)} unidades
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
-          <label className="grid gap-2">
-            <div className="text-xs font-semibold text-slate-400">Observações (opcional)</div>
-            <input
-              value={cashClosingNotes}
-              onChange={(e) => setCashClosingNotes(e.target.value)}
-              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600"
-              placeholder="Ex: sangria, diferença, etc."
-              type="text"
-            />
-          </label>
+          {/* INPUTS PARA FECHAMENTO */}
+          <div className="rounded-2xl border border-amber-900/60 bg-amber-950/30 p-4">
+            <div className="text-sm font-semibold text-amber-200 mb-3">🔢 Confirmação de fechamento</div>
+            
+            <label className="grid gap-2 mb-3">
+              <div className="text-xs font-semibold text-amber-300/80">Valor contado em dinheiro</div>
+              <input
+                value={cashClosingCounted}
+                onChange={(e) => setCashClosingCounted(e.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-600"
+                inputMode="decimal"
+                placeholder="0.00"
+                type="text"
+              />
+              {cashSummary && (
+                <div className="text-xs text-amber-300/70">
+                  Esperado: {Number(cashSummary.expected_cash || 0).toFixed(2)} MZN
+                  {parseDecimal(cashClosingCounted) >= 0 && (
+                    <span className={`ml-2 ${parseDecimal(cashClosingCounted) === cashSummary.expected_cash ? 'text-green-400' : 'text-orange-400'}`}>
+                      Diferença: {(parseDecimal(cashClosingCounted) - cashSummary.expected_cash).toFixed(2)} MZN
+                    </span>
+                  )}
+                </div>
+              )}
+            </label>
 
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              disabled={cashLoading}
-              onClick={() => setOpenCashClose(false)}
-              className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
-            >
-              Voltar
-            </button>
-            <button
-              type="button"
-              disabled={cashLoading || !cashSession?.id}
-              onClick={async () => {
-                const n = parseDecimal(cashClosingCounted)
-                if (!Number.isFinite(n) || n < 0) {
-                  toast.error('Valor contado inválido. Informe um valor maior ou igual a 0.')
-                  return
-                }
-                try {
-                  setCashLoading(true)
-                  await closeCashSession(Number(cashSession.id), {
-                    closing_balance_counted: n,
-                    notes: String(cashClosingNotes || '').trim() || null,
-                  })
-                  toast.success('Caixa fechado.')
+            <label className="grid gap-2">
+              <div className="text-xs font-semibold text-amber-300/80">Observações importantes</div>
+              <input
+                value={cashClosingNotes}
+                onChange={(e) => setCashClosingNotes(e.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-600"
+                placeholder="Ex: sangria, diferença de caixa, observações para auditoria..."
+                type="text"
+              />
+            </label>
+          </div>
 
-                  // Download PDF do backend (igual PDV3)
-                  try {
-                    await downloadCashSessionClosePdf(Number(cashSession.id))
-                  } catch (pdfErr) {
-                    console.error('Erro ao baixar PDF:', pdfErr)
-                    toast.error('PDF não foi gerado, mas caixa foi fechado.')
+          {/* BOTÕES DE AÇÃO */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-400">
+                ⚠️ Esta ação irá fechar o caixa e gerar relatório PDF completo
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={cashLoading || !cashSession?.id}
+                  onClick={async () => {
+                    try {
+                      setCashLoading(true)
+                      await downloadCashSessionClosePdf(Number(cashSession.id))
+                      toast.success('Relatório PDF gerado com sucesso!')
+                    } catch (pdfErr) {
+                      console.error('Erro ao gerar PDF:', pdfErr)
+                      toast.error('Não foi possível gerar o relatório PDF.')
+                    } finally {
+                      setCashLoading(false)
+                    }
+                  }}
+                  className="rounded-xl border border-blue-600 bg-blue-600 hover:bg-blue-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                  title="Gerar relatório PDF com todos os dados e itens vendidos"
+                >
+                  📄 Gerar PDF
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={cashLoading}
+                onClick={() => setOpenCashClose(false)}
+                className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-4 py-2.5 text-sm text-slate-100 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={cashLoading || !cashSession?.id}
+                onClick={async () => {
+                  const n = parseDecimal(cashClosingCounted)
+                  if (!Number.isFinite(n) || n < 0) {
+                    toast.error('Valor contado inválido. Informe um valor maior ou igual a 0.')
+                    return
                   }
+                  try {
+                    setCashLoading(true)
+                    await closeCashSession(Number(cashSession.id), {
+                      closing_balance_counted: n,
+                      notes: String(cashClosingNotes || '').trim() || null,
+                    })
+                    toast.success('Caixa fechado e relatório gerado com sucesso!')
 
-                  setOpenCashClose(false)
-                  setCashSession(null)
-                  setCashSummary(null)
-                } catch (err) {
-                  const msg = err?.response?.data?.detail || 'Não foi possível fechar o caixa agora.'
-                  toast.error(msg)
-                } finally {
-                  setCashLoading(false)
-                }
-              }}
-              className="rounded-xl bg-brand-600 hover:bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {cashLoading ? 'Fechando...' : 'Fechar caixa'}
-            </button>
+                    // Download automático do PDF
+                    try {
+                      await downloadCashSessionClosePdf(Number(cashSession.id))
+                    } catch (pdfErr) {
+                      console.error('Erro ao baixar PDF:', pdfErr)
+                      toast.error('Relatório PDF não foi gerado, mas caixa foi fechado.')
+                    }
+
+                    setOpenCashClose(false)
+                    setCashSession(null)
+                    setCashSummary(null)
+                    setCashItems([])
+                  } catch (err) {
+                    const msg = err?.response?.data?.detail || 'Não foi possível fechar o caixa agora.'
+                    toast.error(msg)
+                  } finally {
+                    setCashLoading(false)
+                  }
+                }}
+                className="rounded-xl bg-red-600 hover:bg-red-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {cashLoading ? 'Fechando...' : 'Confirmar fechamento'}
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
