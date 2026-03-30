@@ -10,36 +10,28 @@ export async function listReservations(params = {}) {
     offset = 0
   } = params
 
-  const queryParams = new URLSearchParams()
-  if (date) queryParams.append('date', date)
-  if (status) queryParams.append('status', status)
-  if (table_id) queryParams.append('table_id', table_id)
-  if (establishment_id) queryParams.append('establishment_id', establishment_id)
-  queryParams.append('limit', limit.toString())
-  queryParams.append('offset', offset.toString())
-
-  const response = await apiClient.get(`/reservations?${queryParams.toString()}`)
+  const response = await apiClient.get('/reservations/', { params })
   return response.data
 }
 
 export async function getReservation(reservationId) {
-  const response = await apiClient.get(`/reservations/${reservationId}`)
+  const response = await apiClient.get(`/reservations/${reservationId}/`)
   return response.data
 }
 
 export async function createReservation(reservationData) {
-  const response = await apiClient.post('/reservations', reservationData)
+  const response = await apiClient.post('/reservations/', reservationData)
   return response.data
 }
 
 export async function updateReservation(reservationId, reservationData) {
-  const response = await apiClient.put(`/reservations/${reservationId}`, reservationData)
+  const response = await apiClient.put(`/reservations/${reservationId}/`, reservationData)
   return response.data
 }
 
 export async function cancelReservation(reservationId, cancellationReason = null) {
   const response = await apiClient.post(
-    `/reservations/${reservationId}/cancel`,
+    `/reservations/${reservationId}/cancel/`,
     {},
     { params: { cancellation_reason: cancellationReason } }
   )
@@ -47,6 +39,6 @@ export async function cancelReservation(reservationId, cancellationReason = null
 }
 
 export async function getTablesAvailability(date) {
-  const response = await apiClient.get(`/reservations/tables/availability/${date}`)
+  const response = await apiClient.get(`/reservations/tables/availability/${date}/`)
   return response.data
 }
