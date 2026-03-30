@@ -11,7 +11,7 @@ export async function createOrder(payload) {
 }
 
 export async function updateOrder(orderId, payload) {
-  const res = await apiClient.put(`/orders/${orderId}/`, payload)
+  const res = await apiClient.put(`/orders/${orderId}`, payload)
   return res.data
 }
 
@@ -21,6 +21,6 @@ export async function closeOrder(orderId, payload) {
 }
 
 export async function deleteOrder(orderId) {
-  const res = await apiClient.delete(`/orders/${orderId}/`)
+  const res = await apiClient.delete(`/orders/${orderId}`)
   return res.data
 }
