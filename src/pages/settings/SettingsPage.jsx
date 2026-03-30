@@ -445,7 +445,9 @@ export default function SettingsPage() {
         await printOrderReceipt(testOrder, branch);
         toast.success('Teste QZ enviado com sucesso!');
       } catch (qzErr) {
-        if (qzErr.message === 'OFFLINE') {
+        if (qzErr.message === 'QZ_OFFLINE') {
+          toast.info('QZ Tray não detectado. Abra o software para impressão direta.', { duration: 5000 });
+          
           // Fallback para o teste antigo se o QZ estiver offline
           const testData = {
             sale: {

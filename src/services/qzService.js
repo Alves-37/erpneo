@@ -15,8 +15,8 @@ export async function connectQZ() {
     await qz.websocket.connect({ retries: 0, delay: 1 });
     console.log("✅ QZ Tray conectado");
   } catch (err) {
-    console.warn("⚠️ QZ Tray offline. Usando fallback...");
-    throw new Error("OFFLINE");
+    console.warn("⚠️ QZ Tray offline.");
+    throw new Error("QZ_OFFLINE");
   }
 }
 

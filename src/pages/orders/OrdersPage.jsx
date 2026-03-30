@@ -707,7 +707,9 @@ export default function OrdersPage() {
       console.error('Erro na impressão QZ Tray:', error);
       
       // Fallback para o método antigo se o QZ Tray estiver offline
-      if (error.message === 'OFFLINE') {
+      if (error.message === 'QZ_OFFLINE') {
+        toast.info('QZ Tray não detectado. Abra o software para impressão direta.', { duration: 5000 });
+        
         const orderData = {
           order: {
             table_number: order.table_number,
