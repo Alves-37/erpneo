@@ -166,9 +166,25 @@ export default function OrdersPage() {
   async function load() {
     setLoading(true)
     try {
-      const { data } = await listOrders({ status, limit: 200, offset: 0 })
-      setRows(data || [])
-    } catch {
+      console.log('🔍 [ORDERS] Chamando listOrders com status:', status)
+      const data = await listOrders({ status, limit: 200, offset: 0 })
+      console.log('🔍 [ORDERS] Resposta da API:', data)
+      
+      let rowsArray = []
+      if (Array.isArray(data)) {
+        rowsArray = data
+      } else if (data && Array.isArray(data.data)) {
+        rowsArray = data.data
+      } else if (data && typeof data === 'object') {
+        // Tentar encontrar qualquer array no objeto de resposta
+        const possibleArray = Object.values(data).find(val => Array.isArray(val))
+        if (possibleArray) rowsArray = possibleArray
+      }
+      
+      console.log('🔍 [ORDERS] Rows processadas:', rowsArray)
+      setRows(rowsArray || [])
+    } catch (err) {
+      console.error('❌ [ORDERS] Erro ao carregar pedidos:', err)
       toast.error('Não foi possível carregar pedidos agora.')
     } finally {
       setLoading(false)
