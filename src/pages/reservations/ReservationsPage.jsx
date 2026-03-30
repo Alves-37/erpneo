@@ -50,6 +50,7 @@ export default function ReservationsPage() {
   const [openNew, setOpenNew] = useState(false)
   const [openEdit, setOpenEdit] = useState(false)
   const [openCancel, setOpenCancel] = useState(false)
+  const [openDetails, setOpenDetails] = useState(false)
   const [activeReservation, setActiveReservation] = useState(null)
   
   // Estados para formulário
@@ -189,6 +190,11 @@ export default function ReservationsPage() {
     })
     setActiveReservation(reservation)
     setOpenEdit(true)
+  }
+
+  function openDetailsModal(reservation) {
+    setActiveReservation(reservation)
+    setOpenDetails(true)
   }
 
   async function handleSave() {
@@ -387,6 +393,13 @@ export default function ReservationsPage() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
+                          onClick={() => openDetailsModal(reservation)}
+                          className="rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-100"
+                        >
+                          Ver
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => openEditModal(reservation)}
                           className="rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-100"
                         >
@@ -413,6 +426,135 @@ export default function ReservationsPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal Detalhes da Reserva */}
+      <Modal open={openDetails} title="Detalhes da Reserva" onClose={() => setOpenDetails(false)}>
+        {activeReservation && (
+          <div className="grid gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cliente</div>
+                <div className="text-sm font-medium text-white">{activeReservation.customer_name}</div>
+                {activeReservation.customer_phone && <div className="text-sm text-slate-300">{activeReservation.customer_phone}</div>}
+                {activeReservation.customer_email && <div className="text-sm text-slate-400">{activeReservation.customer_email}</div>}
+                {activeReservation.customer_nuit && <div className="text-xs text-slate-500">NUIT: {activeReservation.customer_nuit}</div>}
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</div>
+                <div>
+                  <span className={`inline-flex px-2.5 py-1 text-xs font-bold rounded-full border ${getStatusColor(activeReservation.status)}`}>
+                    {getStatusLabel(activeReservation.status)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 py-4 border-y border-slate-800/50">
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mesa</div>
+                <div className="text-sm text-white font-medium">
+                  Mesa {tables.find(t => t.id === activeReservation.table_id)?.number || activeReservation.table_id}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data e Hora</div>
+                <div className="text-sm text-white">
+                  {new Date(activeReservation.reservation_date).toLocaleDateString('pt-MZ')}
+                </div>
+                <div className="text-xs text-slate-400 capitalize">{activeReservation.time_slot}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pessoas</div>
+                <div className="text-sm text-white">
+                  {activeReservation.people_count} pessoa{activeReservation.people_count > 1 ? 's' : ''}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Financeiro</div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Valor Estimado:</span>
+                    <span className="text-white font-medium">
+                      {activeReservation.estimated_amount ? fmtMoney.format(activeReservation.estimated_amount) : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Sinal (%):</span>
+                    <span className="text-white">{activeReservation.deposit_percentage || 0}%</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Valor do Sinal:</span>
+                    <span className="text-brand-400 font-bold">
+                      {activeReservation.deposit_amount ? fmtMoney.format(activeReservation.deposit_amount) : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pagamento do Sinal</div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Método:</span>
+                    <span className="text-white capitalize">{activeReservation.payment_method || 'Aguardando'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Referência:</span>
+                    <span className="text-white text-xs truncate max-w-[120px]" title={activeReservation.payment_reference}>
+                      {activeReservation.payment_reference || '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {(activeReservation.notes || activeReservation.special_requests) && (
+              <div className="grid gap-4 pt-4 border-t border-slate-800/50">
+                {activeReservation.notes && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Observações</div>
+                    <div className="text-sm text-slate-300 bg-slate-800/30 p-3 rounded-xl border border-slate-800/50 italic">
+                      "{activeReservation.notes}"
+                    </div>
+                  </div>
+                )}
+                {activeReservation.special_requests && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pedidos Especiais</div>
+                    <div className="text-sm text-amber-200/80 bg-amber-950/10 p-3 rounded-xl border border-amber-900/20">
+                      {activeReservation.special_requests}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setOpenDetails(false)}
+                className="rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 px-6 py-2.5 text-sm font-semibold text-slate-100 transition-colors"
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenDetails(false)
+                  openEditModal(activeReservation)
+                }}
+                className="rounded-xl bg-brand-600 hover:bg-brand-700 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/20 transition-all active:scale-95"
+              >
+                Editar Reserva
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Modal Nova Reserva */}
       <Modal open={openNew} title="Nova Reserva" onClose={() => setOpenNew(false)}>
